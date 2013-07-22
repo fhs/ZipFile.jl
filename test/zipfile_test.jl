@@ -16,7 +16,7 @@ end
 
 
 # test a zip file created using Info-Zip
-dir = zipopen("ziptest.zip")
+dir = ZipFile.open("ziptest.zip")
 @test length(dir.files) == 4
 
 f = findfile(dir, "ziptest/")
@@ -40,9 +40,9 @@ tmp = mktempdir()
 println("temporary directory: $tmp")
 
 # write an empty zip file
-dir = zipopen("$tmp/empty.zip", true)
+dir = ZipFile.open("$tmp/empty.zip", true)
 close(dir)
-dir = zipopen("$tmp/empty.zip")
+dir = ZipFile.open("$tmp/empty.zip")
 @test length(dir.files) == 0
 
 
@@ -53,14 +53,14 @@ zipdata = [
 	("julia.txt", "julia\n"^10, ZipFile.Deflate),
 ]
 
-dir = zipopen("$tmp/hello.zip", true)
+dir = ZipFile.open("$tmp/hello.zip", true)
 for (name, data, comp) in zipdata
 	f = ZipFile.addfile(dir, name, compression=comp)
 	write(f, data)
 end
 close(dir)
 
-dir = zipopen("$tmp/hello.zip")
+dir = ZipFile.open("$tmp/hello.zip")
 for (name, data, comp) in zipdata
 	f = findfile(dir, name)
 	@test f.compression == comp

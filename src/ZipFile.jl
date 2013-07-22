@@ -4,7 +4,7 @@ import Base: readall, write, close
 import Zlib
 using CRC32
 
-export zipopen, close, readall, write
+export close, readall, write
 
 # TODO: ZIP64 support, data descriptor support
 # TODO: support partial read of File
@@ -43,10 +43,19 @@ type WritableDir
 	closed :: Bool
 end
 
-readle(ios, ::Type{Uint32}) = htol(read(ios, Uint32))
-readle(ios, ::Type{Uint16}) = htol(read(ios, Uint16))
-writele(ios, x::Uint16) = write(ios, reinterpret(Uint8, [htol(x)]))
-writele(ios, x::Uint32) = write(ios, reinterpret(Uint8, [htol(x)]))
+readle(ios::IOStream, ::Type{Uint32}) = htol(read(ios, Uint32))
+readle(ios::IOStream, ::Type{Uint16}) = htol(read(ios, Uint16))
+
+function writele(ios::IOStream, x::Vector{Uint8})
+	n = write(ios, x)
+	if n != length(x)
+		error("short write")
+	end
+	n
+end
+
+writele(ios::IOStream, x::Uint16) = writele(ios, reinterpret(Uint8, [htol(x)]))
+writele(ios::IOStream, x::Uint32) = writele(ios, reinterpret(Uint8, [htol(x)]))
 
 function find_enddiroffset(ios::IOStream)
 	seekend(ios)
@@ -122,12 +131,12 @@ function getfiles(ios::IOStream, diroffset::Integer, nfiles::Integer)
 	files
 end
 
-function zipopen(filename::String, new::Bool=false)
+function open(filename::String, new::Bool=false)
 	if new
-		ios = open(filename, "w")
+		ios = Base.open(filename, "w")
 		return WritableDir(Dir(ios, File[], ""), nothing, false)
 	end
-	ios = open(filename)
+	ios = Base.open(filename)
 	endoff = find_enddiroffset(ios)
 	diroff, nfiles, comment = find_diroffset(ios, endoff)
 	files = getfiles(ios, diroff, nfiles)
@@ -152,25 +161,25 @@ function close(wd::WritableDir)
 	
 	# write central directory record
 	for f in wd.d.files
-		writele(wd.d.ios, uint32(CentralDirSig))
-		writele(wd.d.ios, uint16(ZipVersion))
-		writele(wd.d.ios, uint16(ZipVersion))
-		writele(wd.d.ios, uint16(0))
-		writele(wd.d.ios, uint16(f.compression))
-		writele(wd.d.ios, uint16(0))
-		writele(wd.d.ios, uint16(0))
-		writele(wd.d.ios, uint32(f.crc32))
-		writele(wd.d.ios, uint32(f.compressedsize))
-		writele(wd.d.ios, uint32(f.uncompressedsize))
+		writele(f.ios, uint32(CentralDirSig))
+		writele(f.ios, uint16(ZipVersion))
+		writele(f.ios, uint16(ZipVersion))
+		writele(f.ios, uint16(0))
+		writele(f.ios, uint16(f.compression))
+		writele(f.ios, uint16(0))
+		writele(f.ios, uint16(0))
+		writele(f.ios, uint32(f.crc32))
+		writele(f.ios, uint32(f.compressedsize))
+		writele(f.ios, uint32(f.uncompressedsize))
 		b = convert(Vector{Uint8}, f.name)
-		writele(wd.d.ios, uint16(length(b)))
-		writele(wd.d.ios, uint16(0))
-		writele(wd.d.ios, uint16(0))
-		writele(wd.d.ios, uint16(0))
-		writele(wd.d.ios, uint16(0))
-		writele(wd.d.ios, uint32(0))
-		writele(wd.d.ios, uint32(f.offset))
-		write(wd.d.ios, b)
+		writele(f.ios, uint16(length(b)))
+		writele(f.ios, uint16(0))
+		writele(f.ios, uint16(0))
+		writele(f.ios, uint16(0))
+		writele(f.ios, uint16(0))
+		writele(f.ios, uint32(0))
+		writele(f.ios, uint32(f.offset))
+		writele(f.ios, b)
 		cdsize += 46+length(b)
 	end
 	
@@ -233,19 +242,19 @@ function addfile(wd::WritableDir, name::String; compression::Integer=Store)
 	f = File(wd.d.ios, name, compression, 0, 0, 0, position(wd.d.ios))
 	
 	# Write local file header. Missing entries will be filled in later.
-	writele(wd.d.ios, uint32(LocalFileHdrSig))
-	writele(wd.d.ios, uint16(ZipVersion))
-	writele(wd.d.ios, uint16(0))
-	writele(wd.d.ios, uint16(f.compression))
-	writele(wd.d.ios, uint16(0))
-	writele(wd.d.ios, uint16(0))
-	writele(wd.d.ios, uint32(f.crc32))	# filler
-	writele(wd.d.ios, uint32(f.compressedsize))	# filler
-	writele(wd.d.ios, uint32(f.uncompressedsize))	# filler
+	writele(f.ios, uint32(LocalFileHdrSig))
+	writele(f.ios, uint16(ZipVersion))
+	writele(f.ios, uint16(0))
+	writele(f.ios, uint16(f.compression))
+	writele(f.ios, uint16(0))
+	writele(f.ios, uint16(0))
+	writele(f.ios, uint32(f.crc32))	# filler
+	writele(f.ios, uint32(f.compressedsize))	# filler
+	writele(f.ios, uint32(f.uncompressedsize))	# filler
 	b = convert(Vector{Uint8}, f.name)
-	writele(wd.d.ios, uint16(length(b)))
-	writele(wd.d.ios, uint16(0))
-	write(wd.d.ios, b)
+	writele(f.ios, uint16(length(b)))
+	writele(f.ios, uint16(0))
+	writele(f.ios, b)
 
 	wd.d.files = [wd.d.files, f]
 	wd.current = WritableFile(f, false)
