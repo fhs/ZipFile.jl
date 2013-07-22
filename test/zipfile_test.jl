@@ -20,7 +20,7 @@ dir = ZipFile.open("ziptest.zip")
 @test length(dir.files) == 4
 
 f = findfile(dir, "ziptest/")
-@test f.compression == ZipFile.Store
+@test f.method == ZipFile.Store
 @test f.uncompressedsize == 0
 @test fileequals(f, "")
 
@@ -31,7 +31,7 @@ f = findfile(dir, "ziptest/info.txt")
 @test fileequals(f, "Julia\nfor\ntechnical computing\n")
 
 f = findfile(dir, "ziptest/julia.txt")
-@test f.compression == ZipFile.Deflate
+@test f.method == ZipFile.Deflate
 @test fileequals(f, repeat("Julia\n", 10))
 
 close(dir)
@@ -54,16 +54,16 @@ zipdata = [
 ]
 
 dir = ZipFile.open("$tmp/hello.zip", true)
-for (name, data, comp) in zipdata
-	f = ZipFile.addfile(dir, name, compression=comp)
+for (name, data, meth) in zipdata
+	f = ZipFile.addfile(dir, name, method=meth)
 	write(f, data)
 end
 close(dir)
 
 dir = ZipFile.open("$tmp/hello.zip")
-for (name, data, comp) in zipdata
+for (name, data, meth) in zipdata
 	f = findfile(dir, name)
-	@test f.compression == comp
+	@test f.method == meth
 	@test fileequals(f, data)
 end
 close(dir)

@@ -19,7 +19,7 @@ const Deflate = 8
 type File
 	ios :: IOStream
 	name :: String
-	compression :: Integer
+	method :: Integer
 	crc32 :: Integer
 	compressedsize :: Integer
 	uncompressedsize :: Integer
@@ -114,7 +114,7 @@ function getfiles(ios::IOStream, diroffset::Integer, nfiles::Integer)
 		if (flag & (1<<3)) != 0
 			error("data descriptor not supported")
 		end
-		compression = readle(ios, Uint16)
+		method = readle(ios, Uint16)
 		skip(ios, 2+2)
 		crc32 = readle(ios, Uint32)
 		compsize = readle(ios, Uint32)
@@ -126,7 +126,7 @@ function getfiles(ios::IOStream, diroffset::Integer, nfiles::Integer)
 		offset = readle(ios, Uint32)
 		name = utf8(read(ios, Uint8, namelen))
 		skip(ios, extralen+commentlen)
-		files[i] = File(ios, name, compression, crc32, compsize, uncompsize, offset)
+		files[i] = File(ios, name, method, crc32, compsize, uncompsize, offset)
 	end
 	files
 end
@@ -165,7 +165,7 @@ function close(wd::WritableDir)
 		writele(f.ios, uint16(ZipVersion))
 		writele(f.ios, uint16(ZipVersion))
 		writele(f.ios, uint16(0))
-		writele(f.ios, uint16(f.compression))
+		writele(f.ios, uint16(f.method))
 		writele(f.ios, uint16(0))
 		writele(f.ios, uint16(0))
 		writele(f.ios, uint32(f.crc32))
@@ -220,12 +220,12 @@ function readall(f::File)
 	extralen = readle(f.ios, Uint16)
 	skip(f.ios, filelen+extralen)
 	data = None
-	if f.compression == Store
+	if f.method == Store
 		data = read(f.ios, Uint8, f.uncompressedsize)
-	elseif f.compression == Deflate
+	elseif f.method == Deflate
 		data = Zlib.decompress(read(f.ios, Uint8, f.compressedsize), true)
 	else
-		error("unknown compression method $(f.compression)")
+		error("unknown compression method $(f.method)")
 	end
 	if crc32(data) != f.crc32
 		error("crc32 do not match")
@@ -233,19 +233,19 @@ function readall(f::File)
 	data
 end
 
-function addfile(wd::WritableDir, name::String; compression::Integer=Store)
+function addfile(wd::WritableDir, name::String; method::Integer=Store)
 	if !is(wd.current, nothing)
 		close(wd.current)
 		wd.current = nothing
 	end
 	
-	f = File(wd.d.ios, name, compression, 0, 0, 0, position(wd.d.ios))
+	f = File(wd.d.ios, name, method, 0, 0, 0, position(wd.d.ios))
 	
 	# Write local file header. Missing entries will be filled in later.
 	writele(f.ios, uint32(LocalFileHdrSig))
 	writele(f.ios, uint16(ZipVersion))
 	writele(f.ios, uint16(0))
-	writele(f.ios, uint16(f.compression))
+	writele(f.ios, uint16(f.method))
 	writele(f.ios, uint16(0))
 	writele(f.ios, uint16(0))
 	writele(f.ios, uint32(f.crc32))	# filler
@@ -265,7 +265,7 @@ function write(wf::WritableFile, data::Vector{Uint8})
 	wf.f.uncompressedsize += length(data)
 	wf.f.crc32 = crc32(data, wf.f.crc32)
 	
-	if wf.f.compression == Deflate
+	if wf.f.method == Deflate
 		data = Zlib.compress(data, false, true)
 	end
 	n = write(wf.f.ios, data)
