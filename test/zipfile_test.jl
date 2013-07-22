@@ -37,6 +37,7 @@ f = findfile(dir, "ziptest/julia.txt")
 close(dir)
 
 tmp = mktempdir()
+println("temporary directory: $tmp")
 
 # write an empty zip file
 dir = zipopen("$tmp/empty.zip", true)
@@ -47,21 +48,23 @@ dir = zipopen("$tmp/empty.zip")
 
 # write and then read back a zip file
 zipdata = [
-	("hello.txt", "hello world!\n"),
-	("info.txt", "Julia\nfor\ntechnical computing\n"),
-	("julia.txt", "julia\n"^10),
+	("hello.txt", "hello world!\n", ZipFile.Store),
+	("info.txt", "Julia\nfor\ntechnical computing\n", ZipFile.Store),
+	("julia.txt", "julia\n"^10, ZipFile.Deflate),
 ]
 
 dir = zipopen("$tmp/hello.zip", true)
-for (name, data) in zipdata
-	f = ZipFile.newfile(dir, name)
+for (name, data, comp) in zipdata
+	f = ZipFile.addfile(dir, name, compression=comp)
 	write(f, data)
 end
 close(dir)
 
 dir = zipopen("$tmp/hello.zip")
-for (name, data) in zipdata
-	@test fileequals(findfile(dir, name), data)
+for (name, data, comp) in zipdata
+	f = findfile(dir, name)
+	@test f.compression == comp
+	@test fileequals(f, data)
 end
 close(dir)
 

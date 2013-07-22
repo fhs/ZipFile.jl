@@ -224,13 +224,13 @@ function readall(f::File)
 	data
 end
 
-function newfile(wd::WritableDir, name::String)
+function addfile(wd::WritableDir, name::String; compression::Integer=Store)
 	if !is(wd.current, nothing)
 		close(wd.current)
 		wd.current = nothing
 	end
 	
-	f = File(wd.d.ios, name, Store, 0, 0, 0, position(wd.d.ios))
+	f = File(wd.d.ios, name, compression, 0, 0, 0, position(wd.d.ios))
 	
 	# Write local file header. Missing entries will be filled in later.
 	writele(wd.d.ios, uint32(LocalFileHdrSig))
@@ -253,9 +253,13 @@ function newfile(wd::WritableDir, name::String)
 end
 
 function write(wf::WritableFile, data::Vector{Uint8})
-	n = write(wf.f.ios, data)
+	wf.f.uncompressedsize += length(data)
 	wf.f.crc32 = crc32(data, wf.f.crc32)
-	wf.f.uncompressedsize += n
+	
+	if wf.f.compression == Deflate
+		data = Zlib.compress(data, false, true)
+	end
+	n = write(wf.f.ios, data)
 	wf.f.compressedsize += n
 	n
 end
