@@ -1,5 +1,8 @@
 module ZipFile
 
+# ZIP file format is described in
+# http://www.pkware.com/documents/casestudies/APPNOTE.TXT
+
 import Base: readall, write, close
 import Zlib
 using CRC32

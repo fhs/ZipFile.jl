@@ -1,10 +1,12 @@
-ZipFile.jl: Read/Write ZIP file archives in Julia
-=================================================
+## Overview 
 
-This module provides support for reading and writing ZIP archives.
+This module provides support for reading and writing ZIP archives in Julia.
 
-Example usage
--------------
+## Installation
+
+Install via the Julia package manager, `Pkg.add("ZipFile")`.
+
+## Example usage
 
 Write a new ZIP file:
 
