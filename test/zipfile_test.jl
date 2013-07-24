@@ -11,12 +11,12 @@ function findfile(dir, name)
 end
 
 function fileequals(f, s)
-	readall(f) == convert(Vector{Uint8}, s)
+	readall(f) == s
 end
 
 
 # test a zip file created using Info-Zip
-dir = ZipFile.open("ziptest.zip")
+dir = ZipFile.open(joinpath(Pkg.dir("ZipFile"), "test/ziptest.zip"))
 @test length(dir.files) == 4
 
 f = findfile(dir, "ziptest/")
@@ -36,8 +36,8 @@ f = findfile(dir, "ziptest/julia.txt")
 
 close(dir)
 
+
 tmp = mktempdir()
-println("temporary directory: $tmp")
 
 # write an empty zip file
 dir = ZipFile.open("$tmp/empty.zip", true)

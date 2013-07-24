@@ -11,30 +11,29 @@ Install via the Julia package manager, `Pkg.add("ZipFile")`.
 Write a new ZIP file:
 
 ```julia
-julia> using ZipFile
+using ZipFile
 
-julia> dir = ZipFile.open("example.zip", true);
-
-julia> f = ZipFile.addfile(dir, "hello.txt");
-
-julia> write(f, "hello world!\n");
-
-julia> f = ZipFile.addfile(dir, "julia.txt", method=ZipFile.Deflate);
-
-julia> write(f, "Julia\n"^5);
-
-julia> close(dir)
+dir = ZipFile.open("example.zip", true);
+f = ZipFile.addfile(dir, "hello.txt");
+write(f, "hello world!\n");
+f = ZipFile.addfile(dir, "julia.txt", method=ZipFile.Deflate);
+write(f, "Julia\n"^5);
+close(dir)
 ```
 
 Read and print out the contents of a ZIP file:
 
 ```julia
-julia> dir = ZipFile.open("example.zip");
+dir = ZipFile.open("example.zip");
+for f in dir.files
+	println("Filename: $(f.name)")
+	write(readall(f));
+end
+close(dir)
+```
+Output:
 
-julia> for f in dir.files
-           println("Filename: $(f.name)")
-           write(utf8(readall(f)));
-       end
+```
 Filename: hello.txt
 hello world!
 Filename: julia.txt
@@ -43,6 +42,4 @@ Julia
 Julia
 Julia
 Julia
-
-julia> close(dir)
 ```

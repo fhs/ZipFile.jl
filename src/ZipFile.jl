@@ -213,7 +213,7 @@ function close(wf::WritableFile)
 	seekend(wf.f.ios)
 end
 
-function readall(f::File)
+function readbytes(f::File)
 	seek(f.ios, f.offset)
 	if readle(f.ios, Uint32) != LocalFileHdrSig
 		error("invalid file header")
@@ -234,6 +234,11 @@ function readall(f::File)
 		error("crc32 do not match")
 	end
 	data
+end
+
+function readall(f::File)
+	b = readbytes(f)
+	return is_valid_ascii(b) ? ASCIIString(b) : UTF8String(b)
 end
 
 function addfile(wd::WritableDir, name::String; method::Integer=Store)
