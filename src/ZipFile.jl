@@ -38,6 +38,7 @@ end
 type WritableFile
 	f :: File
 	closed :: Bool
+	dirty :: Bool
 end
 
 type WritableDir
@@ -265,14 +266,18 @@ function addfile(wd::WritableDir, name::String; method::Integer=Store)
 	writele(f.ios, b)
 
 	wd.d.files = [wd.d.files, f]
-	wd.current = WritableFile(f, false)
+	wd.current = WritableFile(f, false, false)
 	wd.current
 end
 
 function write(wf::WritableFile, data::Vector{Uint8})
+	if wf.f.method == Deflate && wf.dirty
+		error("multiple deflate writes not supported")
+	end
+	wf.dirty = true
+	
 	wf.f.uncompressedsize += length(data)
 	wf.f.crc32 = crc32(data, wf.f.crc32)
-	
 	if wf.f.method == Deflate
 		data = Zlib.compress(data, false, true)
 	end

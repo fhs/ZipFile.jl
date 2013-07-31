@@ -38,6 +38,7 @@ close(dir)
 
 
 tmp = mktempdir()
+println("temporary directory $tmp")
 
 # write an empty zip file
 dir = ZipFile.open("$tmp/empty.zip", true)
@@ -67,5 +68,13 @@ for (name, data, meth) in zipdata
 	@test fileequals(f, data)
 end
 close(dir)
+
+
+dir = ZipFile.open("$tmp/multi.zip", true)
+f = ZipFile.addfile(dir, "data", method=ZipFile.Deflate)
+write(f, "this is an example")
+@test_throws write(f, "sentence. hello world.")
+close(dir)
+
 
 run(`rm -rf $tmp`)
