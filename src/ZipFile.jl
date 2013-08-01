@@ -33,19 +33,30 @@ type Dir
 	ios :: IOStream
 	files :: Vector{File}
 	comment :: String
+	
+	Dir(ios::IOStream, files::Vector{File}, comment::String) =
+		(x = new(ios, files, comment); finalizer(x, close); x)
 end
 
 type WritableFile
 	f :: File
 	closed :: Bool
 	dirty :: Bool
+	
+	WritableFile(f::File, closed::Bool, dirty::Bool) =
+		(x = new(f, closed, dirty); finalizer(x, close); x)
 end
+WritableFile(f::File) = WritableFile(f, false, false)
 
 type WritableDir
 	d :: Dir
 	current :: Union(WritableFile, Nothing)
 	closed :: Bool
+	
+	WritableDir(d::Dir, current::Union(WritableFile, Nothing), closed::Bool) =
+		(x = new(d, current, closed); finalizer(x, close); x)
 end
+WritableDir(d::Dir) = WritableDir(d, nothing, false)
 
 readle(ios::IOStream, ::Type{Uint32}) = htol(read(ios, Uint32))
 readle(ios::IOStream, ::Type{Uint16}) = htol(read(ios, Uint16))
@@ -138,7 +149,7 @@ end
 function open(filename::String, new::Bool=false)
 	if new
 		ios = Base.open(filename, "w")
-		return WritableDir(Dir(ios, File[], ""), nothing, false)
+		return WritableDir(Dir(ios, File[], ""))
 	end
 	ios = Base.open(filename)
 	endoff = find_enddiroffset(ios)
@@ -151,7 +162,7 @@ close(dir::Dir) = close(dir.ios)
 
 function close(wd::WritableDir)
 	if wd.closed
-		error("zip file already closed")
+		return
 	end
 	wd.closed = true
 	
@@ -197,12 +208,12 @@ function close(wd::WritableDir)
 	writele(wd.d.ios, uint32(cdpos))
 	writele(wd.d.ios, uint16(0))
 	
-	close(wd.d.ios)
+	close(wd.d)
 end
 
 function close(wf::WritableFile)
 	if wf.closed
-		error("file entry already closed")
+		return
 	end
 	wf.closed = true
 	
@@ -266,7 +277,7 @@ function addfile(wd::WritableDir, name::String; method::Integer=Store)
 	writele(f.ios, b)
 
 	wd.d.files = [wd.d.files, f]
-	wd.current = WritableFile(f, false, false)
+	wd.current = WritableFile(f)
 	wd.current
 end
 
