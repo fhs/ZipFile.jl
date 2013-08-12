@@ -11,7 +11,7 @@ before_install:
     - git config --global user.name "Travis User"
     - git config --global user.email "travis@example.net"
 script:
-    - julia -e "Pkg.init()"
+    - julia -e 'Pkg.init(); Pkg.add("CRC32", Pkg.VersionSet("Zlib", [v"0.1.1"]))'
     - mkdir -p ~/.julia/ZipFile
     - cp -R ./* ~/.julia/ZipFile/
     - julia ~/.julia/ZipFile/test/zipfile_test.jl
