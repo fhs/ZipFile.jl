@@ -5,7 +5,6 @@ module ZipFile
 
 import Base: readall, write, close
 import Zlib
-using CRC32
 
 export close, readall, write
 
@@ -242,7 +241,7 @@ function readbytes(f::File)
 	else
 		error("unknown compression method $(f.method)")
 	end
-	if crc32(data) != f.crc32
+	if Zlib.crc32(data) != f.crc32
 		error("crc32 do not match")
 	end
 	data
@@ -288,7 +287,7 @@ function write(wf::WritableFile, data::Vector{Uint8})
 	wf.dirty = true
 	
 	wf.f.uncompressedsize += length(data)
-	wf.f.crc32 = crc32(data, wf.f.crc32)
+	wf.f.crc32 = Zlib.crc32(data, wf.f.crc32)
 	if wf.f.method == Deflate
 		data = Zlib.compress(data, false, true)
 	end
