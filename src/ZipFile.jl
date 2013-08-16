@@ -3,10 +3,10 @@ module ZipFile
 # ZIP file format is described in
 # http://www.pkware.com/documents/casestudies/APPNOTE.TXT
 
-import Base: readall, write, close
+import Base: readall, write, close, mtime
 import Zlib
 
-export close, readall, write
+export readall, write, close, mtime
 
 # TODO: ZIP64 support, data descriptor support
 # TODO: support partial read of File
@@ -21,11 +21,13 @@ const Deflate = 8
 type File
 	ios :: IOStream
 	name :: String
-	method :: Integer
-	crc32 :: Integer
-	compressedsize :: Integer
-	uncompressedsize :: Integer
-	offset :: Integer
+	method :: Uint16
+	dostime :: Uint16
+	dosdate :: Uint16
+	crc32 :: Uint32
+	compressedsize :: Uint32
+	uncompressedsize :: Uint32
+	offset :: Uint32
 end
 
 type Dir
@@ -70,6 +72,28 @@ end
 
 writele(ios::IOStream, x::Uint16) = writele(ios, reinterpret(Uint8, [htol(x)]))
 writele(ios::IOStream, x::Uint32) = writele(ios, reinterpret(Uint8, [htol(x)]))
+
+# For MS-DOS time/date format, see:
+# See http://msdn.microsoft.com/en-us/library/ms724247(v=VS.85).aspx
+# Convert seconds since epoch to MS-DOS time/date, which has
+# a resolution of 2 seconds.
+function msdostime(secs)
+	t = TmStruct(secs)
+	dostime = uint16((t.hour<<11) | (t.min<<5) | div(t.sec, 2))
+	dosdate = uint16(((t.year+1900-1980)<<9) | ((t.month+1)<<5) | t.mday)
+	dostime, dosdate
+end
+
+# Convert MS-DOS time/date to seconds since epoch
+function mtime(f::File)
+	sec = 2*(f.dostime & 0x1f)
+	min = (f.dostime>>5) & 0x3f
+	hour = f.dostime>>11
+	mday = f.dosdate & 0x1f
+	month = ((f.dosdate>>5) & 0xf) - 1
+	year = (f.dosdate>>9) + 1980 - 1900
+	time(TmStruct(sec, min, hour, mday, month, year, 0, 0, -1))
+end
 
 function find_enddiroffset(ios::IOStream)
 	seekend(ios)
@@ -129,7 +153,8 @@ function getfiles(ios::IOStream, diroffset::Integer, nfiles::Integer)
 			error("data descriptor not supported")
 		end
 		method = readle(ios, Uint16)
-		skip(ios, 2+2)
+		dostime = readle(ios, Uint16)
+		dosdate = readle(ios, Uint16)
 		crc32 = readle(ios, Uint32)
 		compsize = readle(ios, Uint32)
 		uncompsize = readle(ios, Uint32)
@@ -140,7 +165,8 @@ function getfiles(ios::IOStream, diroffset::Integer, nfiles::Integer)
 		offset = readle(ios, Uint32)
 		name = utf8(read(ios, Uint8, namelen))
 		skip(ios, extralen+commentlen)
-		files[i] = File(ios, name, method, crc32, compsize, uncompsize, offset)
+		files[i] = File(ios, name, method, dostime, dosdate,
+			crc32, compsize, uncompsize, offset)
 	end
 	files
 end
@@ -180,8 +206,8 @@ function close(wd::WritableDir)
 		writele(f.ios, uint16(ZipVersion))
 		writele(f.ios, uint16(0))
 		writele(f.ios, uint16(f.method))
-		writele(f.ios, uint16(0))
-		writele(f.ios, uint16(0))
+		writele(f.ios, uint16(f.dostime))
+		writele(f.ios, uint16(f.dosdate))
 		writele(f.ios, uint32(f.crc32))
 		writele(f.ios, uint32(f.compressedsize))
 		writele(f.ios, uint32(f.uncompressedsize))
@@ -252,21 +278,26 @@ function readall(f::File)
 	return is_valid_ascii(b) ? ASCIIString(b) : UTF8String(b)
 end
 
-function addfile(wd::WritableDir, name::String; method::Integer=Store)
+function addfile(wd::WritableDir, name::String; method::Integer=Store, mtime::Float64=-1.0)
 	if !is(wd.current, nothing)
 		close(wd.current)
 		wd.current = nothing
 	end
 	
-	f = File(wd.d.ios, name, method, 0, 0, 0, position(wd.d.ios))
+	if mtime < 0
+		mtime = time()
+	end
+	dostime, dosdate = msdostime(mtime)
+	f = File(wd.d.ios, name, uint16(method), dostime, dosdate,
+		uint32(0), uint32(0), uint32(0), uint32(position(wd.d.ios)))
 	
 	# Write local file header. Missing entries will be filled in later.
 	writele(f.ios, uint32(LocalFileHdrSig))
 	writele(f.ios, uint16(ZipVersion))
 	writele(f.ios, uint16(0))
 	writele(f.ios, uint16(f.method))
-	writele(f.ios, uint16(0))
-	writele(f.ios, uint16(0))
+	writele(f.ios, uint16(f.dostime))
+	writele(f.ios, uint16(f.dosdate))
 	writele(f.ios, uint32(f.crc32))	# filler
 	writele(f.ios, uint32(f.compressedsize))	# filler
 	writele(f.ios, uint32(f.uncompressedsize))	# filler

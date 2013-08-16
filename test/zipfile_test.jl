@@ -53,10 +53,12 @@ zipdata = [
 	("info.txt", "Julia\nfor\ntechnical computing\n", ZipFile.Store),
 	("julia.txt", "julia\n"^10, ZipFile.Deflate),
 ]
+# 2013-08-16	9:42:24
+modtime = time(TmStruct(24, 42, 9, 16, 7, 2013-1900, 0, 0, -1))
 
 dir = ZipFile.open("$tmp/hello.zip", true)
 for (name, data, meth) in zipdata
-	f = ZipFile.addfile(dir, name, method=meth)
+	f = ZipFile.addfile(dir, name; method=meth, mtime=modtime)
 	write(f, data)
 end
 close(dir)
@@ -65,13 +67,14 @@ dir = ZipFile.open("$tmp/hello.zip")
 for (name, data, meth) in zipdata
 	f = findfile(dir, name)
 	@test f.method == meth
+	@test abs(mtime(f) - modtime) < 2
 	@test fileequals(f, data)
 end
 close(dir)
 
 
 dir = ZipFile.open("$tmp/multi.zip", true)
-f = ZipFile.addfile(dir, "data", method=ZipFile.Deflate)
+f = ZipFile.addfile(dir, "data"; method=ZipFile.Deflate)
 write(f, "this is an example")
 @test_throws write(f, "sentence. hello world.")
 close(dir)
