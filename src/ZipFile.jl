@@ -58,19 +58,17 @@ end
 WritableFile(f::File) = WritableFile(f, false, false)
 
 type Writer
-	d :: Reader
+	ios :: IOStream
+	files :: Vector{File}
 	current :: Union(WritableFile, Nothing)
 	closed :: Bool
 	
-	Writer(d::Reader, current::Union(WritableFile, Nothing), closed::Bool) =
-		(x = new(d, current, closed); finalizer(x, close); x)
+	Writer(ios::IOStream, files::Vector{File},
+		current::Union(WritableFile, Nothing), closed::Bool) =
+		(x = new(ios, files, current, closed); finalizer(x, close); x)
 end
-Writer(d::Reader) = Writer(d, nothing, false)
-
-function Writer(filename::String)
-	ios = Base.open(filename, "w")
-	Writer(Reader(ios, File[], ""))
-end
+Writer(ios::IOStream, files::Vector{File}) = Writer(ios, files, nothing, false)
+Writer(filename::String) = Writer(Base.open(filename, "w"), File[])
 
 include("deprecated.jl")
 
@@ -199,11 +197,11 @@ function close(wd::Writer)
 		wd.current = nothing
 	end
 
-	cdpos = position(wd.d.ios)
+	cdpos = position(wd.ios)
 	cdsize = 0
 	
 	# write central directory record
-	for f in wd.d.files
+	for f in wd.files
 		writele(f.ios, uint32(CentralDirSig))
 		writele(f.ios, uint16(ZipVersion))
 		writele(f.ios, uint16(ZipVersion))
@@ -227,16 +225,16 @@ function close(wd::Writer)
 	end
 	
 	# write end of central directory
-	writele(wd.d.ios, uint32(EndCentralDirSig))
-	writele(wd.d.ios, uint16(0))
-	writele(wd.d.ios, uint16(0))
-	writele(wd.d.ios, uint16(length(wd.d.files)))
-	writele(wd.d.ios, uint16(length(wd.d.files)))
-	writele(wd.d.ios, uint32(cdsize))
-	writele(wd.d.ios, uint32(cdpos))
-	writele(wd.d.ios, uint16(0))
+	writele(wd.ios, uint32(EndCentralDirSig))
+	writele(wd.ios, uint16(0))
+	writele(wd.ios, uint16(0))
+	writele(wd.ios, uint16(length(wd.files)))
+	writele(wd.ios, uint16(length(wd.files)))
+	writele(wd.ios, uint32(cdsize))
+	writele(wd.ios, uint32(cdpos))
+	writele(wd.ios, uint16(0))
 	
-	close(wd.d)
+	close(wd.ios)
 end
 
 function close(wf::WritableFile)
@@ -291,8 +289,8 @@ function addfile(wd::Writer, name::String; method::Integer=Store, mtime::Float64
 		mtime = time()
 	end
 	dostime, dosdate = msdostime(mtime)
-	f = File(wd.d.ios, name, uint16(method), dostime, dosdate,
-		uint32(0), uint32(0), uint32(0), uint32(position(wd.d.ios)))
+	f = File(wd.ios, name, uint16(method), dostime, dosdate,
+		uint32(0), uint32(0), uint32(0), uint32(position(wd.ios)))
 	
 	# Write local file header. Missing entries will be filled in later.
 	writele(f.ios, uint32(LocalFileHdrSig))
@@ -309,7 +307,7 @@ function addfile(wd::Writer, name::String; method::Integer=Store, mtime::Float64
 	writele(f.ios, uint16(0))
 	writele(f.ios, b)
 
-	wd.d.files = [wd.d.files, f]
+	wd.files = [wd.files, f]
 	wd.current = WritableFile(f)
 	wd.current
 end
