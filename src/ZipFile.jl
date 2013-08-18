@@ -186,55 +186,55 @@ end
 
 close(dir::Reader) = close(dir.ios)
 
-function close(wd::Writer)
-	if wd.closed
+function close(w::Writer)
+	if w.closed
 		return
 	end
-	wd.closed = true
+	w.closed = true
 	
-	if !is(wd.current, nothing)
-		close(wd.current)
-		wd.current = nothing
+	if !is(w.current, nothing)
+		close(w.current)
+		w.current = nothing
 	end
 
-	cdpos = position(wd.ios)
+	cdpos = position(w.ios)
 	cdsize = 0
 	
 	# write central directory record
-	for f in wd.files
-		writele(f.ios, uint32(CentralDirSig))
-		writele(f.ios, uint16(ZipVersion))
-		writele(f.ios, uint16(ZipVersion))
-		writele(f.ios, uint16(0))
-		writele(f.ios, uint16(f.method))
-		writele(f.ios, uint16(f.dostime))
-		writele(f.ios, uint16(f.dosdate))
-		writele(f.ios, uint32(f.crc32))
-		writele(f.ios, uint32(f.compressedsize))
-		writele(f.ios, uint32(f.uncompressedsize))
+	for f in w.files
+		writele(w.ios, uint32(CentralDirSig))
+		writele(w.ios, uint16(ZipVersion))
+		writele(w.ios, uint16(ZipVersion))
+		writele(w.ios, uint16(0))
+		writele(w.ios, uint16(f.method))
+		writele(w.ios, uint16(f.dostime))
+		writele(w.ios, uint16(f.dosdate))
+		writele(w.ios, uint32(f.crc32))
+		writele(w.ios, uint32(f.compressedsize))
+		writele(w.ios, uint32(f.uncompressedsize))
 		b = convert(Vector{Uint8}, f.name)
-		writele(f.ios, uint16(length(b)))
-		writele(f.ios, uint16(0))
-		writele(f.ios, uint16(0))
-		writele(f.ios, uint16(0))
-		writele(f.ios, uint16(0))
-		writele(f.ios, uint32(0))
-		writele(f.ios, uint32(f.offset))
-		writele(f.ios, b)
+		writele(w.ios, uint16(length(b)))
+		writele(w.ios, uint16(0))
+		writele(w.ios, uint16(0))
+		writele(w.ios, uint16(0))
+		writele(w.ios, uint16(0))
+		writele(w.ios, uint32(0))
+		writele(w.ios, uint32(f.offset))
+		writele(w.ios, b)
 		cdsize += 46+length(b)
 	end
 	
 	# write end of central directory
-	writele(wd.ios, uint32(EndCentralDirSig))
-	writele(wd.ios, uint16(0))
-	writele(wd.ios, uint16(0))
-	writele(wd.ios, uint16(length(wd.files)))
-	writele(wd.ios, uint16(length(wd.files)))
-	writele(wd.ios, uint32(cdsize))
-	writele(wd.ios, uint32(cdpos))
-	writele(wd.ios, uint16(0))
+	writele(w.ios, uint32(EndCentralDirSig))
+	writele(w.ios, uint16(0))
+	writele(w.ios, uint16(0))
+	writele(w.ios, uint16(length(w.files)))
+	writele(w.ios, uint16(length(w.files)))
+	writele(w.ios, uint32(cdsize))
+	writele(w.ios, uint32(cdpos))
+	writele(w.ios, uint16(0))
 	
-	close(wd.ios)
+	close(w.ios)
 end
 
 function close(wf::WritableFile)
@@ -279,37 +279,37 @@ function readall(f::File)
 	return is_valid_ascii(b) ? ASCIIString(b) : UTF8String(b)
 end
 
-function addfile(wd::Writer, name::String; method::Integer=Store, mtime::Float64=-1.0)
-	if !is(wd.current, nothing)
-		close(wd.current)
-		wd.current = nothing
+function addfile(w::Writer, name::String; method::Integer=Store, mtime::Float64=-1.0)
+	if !is(w.current, nothing)
+		close(w.current)
+		w.current = nothing
 	end
 	
 	if mtime < 0
 		mtime = time()
 	end
 	dostime, dosdate = msdostime(mtime)
-	f = File(wd.ios, name, uint16(method), dostime, dosdate,
-		uint32(0), uint32(0), uint32(0), uint32(position(wd.ios)))
+	f = File(w.ios, name, uint16(method), dostime, dosdate,
+		uint32(0), uint32(0), uint32(0), uint32(position(w.ios)))
 	
 	# Write local file header. Missing entries will be filled in later.
-	writele(f.ios, uint32(LocalFileHdrSig))
-	writele(f.ios, uint16(ZipVersion))
-	writele(f.ios, uint16(0))
-	writele(f.ios, uint16(f.method))
-	writele(f.ios, uint16(f.dostime))
-	writele(f.ios, uint16(f.dosdate))
-	writele(f.ios, uint32(f.crc32))	# filler
-	writele(f.ios, uint32(f.compressedsize))	# filler
-	writele(f.ios, uint32(f.uncompressedsize))	# filler
+	writele(w.ios, uint32(LocalFileHdrSig))
+	writele(w.ios, uint16(ZipVersion))
+	writele(w.ios, uint16(0))
+	writele(w.ios, uint16(f.method))
+	writele(w.ios, uint16(f.dostime))
+	writele(w.ios, uint16(f.dosdate))
+	writele(w.ios, uint32(f.crc32))	# filler
+	writele(w.ios, uint32(f.compressedsize))	# filler
+	writele(w.ios, uint32(f.uncompressedsize))	# filler
 	b = convert(Vector{Uint8}, f.name)
-	writele(f.ios, uint16(length(b)))
-	writele(f.ios, uint16(0))
-	writele(f.ios, b)
+	writele(w.ios, uint16(length(b)))
+	writele(w.ios, uint16(0))
+	writele(w.ios, b)
 
-	wd.files = [wd.files, f]
-	wd.current = WritableFile(f)
-	wd.current
+	w.files = [w.files, f]
+	w.current = WritableFile(f)
+	w.current
 end
 
 function write(wf::WritableFile, data::Vector{Uint8})
