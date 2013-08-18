@@ -19,7 +19,7 @@ const Store = 0
 const Deflate = 8
 
 type File
-	ios :: IO
+	io :: IO
 	name :: String
 	method :: Uint16
 	dostime :: Uint16
@@ -31,20 +31,20 @@ type File
 end
 
 type Reader
-	ios :: IO
+	io :: IO
 	files :: Vector{File}
 	comment :: String
 	
-	Reader(ios::IO, files::Vector{File}, comment::String) =
-		(x = new(ios, files, comment); finalizer(x, close); x)
+	Reader(io::IO, files::Vector{File}, comment::String) =
+		(x = new(io, files, comment); finalizer(x, close); x)
 end
 
 function Reader(filename::String)
-	ios = Base.open(filename)
-	endoff = find_enddiroffset(ios)
-	diroff, nfiles, comment = find_diroffset(ios, endoff)
-	files = getfiles(ios, diroff, nfiles)
-	Reader(ios, files, comment)
+	io = Base.open(filename)
+	endoff = find_enddiroffset(io)
+	diroff, nfiles, comment = find_diroffset(io, endoff)
+	files = getfiles(io, diroff, nfiles)
+	Reader(io, files, comment)
 end
 
 type WritableFile
@@ -58,33 +58,33 @@ end
 WritableFile(f::File) = WritableFile(f, false, false)
 
 type Writer
-	ios :: IO
+	io :: IO
 	files :: Vector{File}
 	current :: Union(WritableFile, Nothing)
 	closed :: Bool
 	
-	Writer(ios::IO, files::Vector{File},
+	Writer(io::IO, files::Vector{File},
 		current::Union(WritableFile, Nothing), closed::Bool) =
-		(x = new(ios, files, current, closed); finalizer(x, close); x)
+		(x = new(io, files, current, closed); finalizer(x, close); x)
 end
-Writer(ios::IO, files::Vector{File}) = Writer(ios, files, nothing, false)
+Writer(io::IO, files::Vector{File}) = Writer(io, files, nothing, false)
 Writer(filename::String) = Writer(Base.open(filename, "w"), File[])
 
 include("deprecated.jl")
 
-readle(ios::IO, ::Type{Uint32}) = htol(read(ios, Uint32))
-readle(ios::IO, ::Type{Uint16}) = htol(read(ios, Uint16))
+readle(io::IO, ::Type{Uint32}) = htol(read(io, Uint32))
+readle(io::IO, ::Type{Uint16}) = htol(read(io, Uint16))
 
-function writele(ios::IO, x::Vector{Uint8})
-	n = write(ios, x)
+function writele(io::IO, x::Vector{Uint8})
+	n = write(io, x)
 	if n != length(x)
 		error("short write")
 	end
 	n
 end
 
-writele(ios::IO, x::Uint16) = writele(ios, reinterpret(Uint8, [htol(x)]))
-writele(ios::IO, x::Uint32) = writele(ios, reinterpret(Uint8, [htol(x)]))
+writele(io::IO, x::Uint16) = writele(io, reinterpret(Uint8, [htol(x)]))
+writele(io::IO, x::Uint32) = writele(io, reinterpret(Uint8, [htol(x)]))
 
 # For MS-DOS time/date format, see:
 # http://msdn.microsoft.com/en-us/library/ms724247(v=VS.85).aspx
@@ -108,9 +108,9 @@ function mtime(f::File)
 	time(TmStruct(sec, min, hour, mday, month, year, 0, 0, -1))
 end
 
-function find_enddiroffset(ios::IO)
-	seekend(ios)
-	filesize = position(ios)
+function find_enddiroffset(io::IO)
+	seekend(io)
+	filesize = position(io)
 	offset = None
 
 	# Look for end of central directory locator in the last 1KB.
@@ -121,8 +121,8 @@ function find_enddiroffset(ios::IO)
 		end
 		k = min(filesize, guess)
 		n = filesize-k
-		seek(ios, n)
-		b = read(ios, Uint8, k)
+		seek(io, n)
+		b = read(io, Uint8, k)
 		for i in 1:k-3
 			if htol(reinterpret(Uint32, b[i:i+3]))[1] == EndCentralDirSig
 				offset = n+i-1
@@ -136,55 +136,55 @@ function find_enddiroffset(ios::IO)
 	offset
 end
 
-function find_diroffset(ios::IO, enddiroffset::Integer)
-	seek(ios, enddiroffset)
-	if readle(ios, Uint32) != EndCentralDirSig
+function find_diroffset(io::IO, enddiroffset::Integer)
+	seek(io, enddiroffset)
+	if readle(io, Uint32) != EndCentralDirSig
 		error("internal error")
 	end
-	skip(ios, 2+2+2)
-	nfiles = read(ios, Uint16)
-	skip(ios, 4)
-	offset = readle(ios, Uint32)
-	commentlen = readle(ios, Uint16)
-	comment = utf8(read(ios, Uint8, commentlen))
+	skip(io, 2+2+2)
+	nfiles = read(io, Uint16)
+	skip(io, 4)
+	offset = readle(io, Uint32)
+	commentlen = readle(io, Uint16)
+	comment = utf8(read(io, Uint8, commentlen))
 	offset, nfiles, comment
 end
 
-function getfiles(ios::IO, diroffset::Integer, nfiles::Integer)
-	seek(ios, diroffset)
+function getfiles(io::IO, diroffset::Integer, nfiles::Integer)
+	seek(io, diroffset)
 	files = Array(File, nfiles)
 	for i in 1:nfiles
-		if readle(ios, Uint32) != CentralDirSig
+		if readle(io, Uint32) != CentralDirSig
 			error("invalid file header")
 		end
-		skip(ios, 2+2)
-		flag = readle(ios, Uint16)
+		skip(io, 2+2)
+		flag = readle(io, Uint16)
 		if (flag & (1<<0)) != 0
 			error("encryption not supported")
 		end
 		if (flag & (1<<3)) != 0
 			error("data descriptor not supported")
 		end
-		method = readle(ios, Uint16)
-		dostime = readle(ios, Uint16)
-		dosdate = readle(ios, Uint16)
-		crc32 = readle(ios, Uint32)
-		compsize = readle(ios, Uint32)
-		uncompsize = readle(ios, Uint32)
-		namelen = readle(ios, Uint16)
-		extralen = readle(ios, Uint16)
-		commentlen = readle(ios, Uint16)
-		skip(ios, 2+2+4)
-		offset = readle(ios, Uint32)
-		name = utf8(read(ios, Uint8, namelen))
-		skip(ios, extralen+commentlen)
-		files[i] = File(ios, name, method, dostime, dosdate,
+		method = readle(io, Uint16)
+		dostime = readle(io, Uint16)
+		dosdate = readle(io, Uint16)
+		crc32 = readle(io, Uint32)
+		compsize = readle(io, Uint32)
+		uncompsize = readle(io, Uint32)
+		namelen = readle(io, Uint16)
+		extralen = readle(io, Uint16)
+		commentlen = readle(io, Uint16)
+		skip(io, 2+2+4)
+		offset = readle(io, Uint32)
+		name = utf8(read(io, Uint8, namelen))
+		skip(io, extralen+commentlen)
+		files[i] = File(io, name, method, dostime, dosdate,
 			crc32, compsize, uncompsize, offset)
 	end
 	files
 end
 
-close(dir::Reader) = close(dir.ios)
+close(dir::Reader) = close(dir.io)
 
 function close(w::Writer)
 	if w.closed
@@ -197,44 +197,44 @@ function close(w::Writer)
 		w.current = nothing
 	end
 
-	cdpos = position(w.ios)
+	cdpos = position(w.io)
 	cdsize = 0
 	
 	# write central directory record
 	for f in w.files
-		writele(w.ios, uint32(CentralDirSig))
-		writele(w.ios, uint16(ZipVersion))
-		writele(w.ios, uint16(ZipVersion))
-		writele(w.ios, uint16(0))
-		writele(w.ios, uint16(f.method))
-		writele(w.ios, uint16(f.dostime))
-		writele(w.ios, uint16(f.dosdate))
-		writele(w.ios, uint32(f.crc32))
-		writele(w.ios, uint32(f.compressedsize))
-		writele(w.ios, uint32(f.uncompressedsize))
+		writele(w.io, uint32(CentralDirSig))
+		writele(w.io, uint16(ZipVersion))
+		writele(w.io, uint16(ZipVersion))
+		writele(w.io, uint16(0))
+		writele(w.io, uint16(f.method))
+		writele(w.io, uint16(f.dostime))
+		writele(w.io, uint16(f.dosdate))
+		writele(w.io, uint32(f.crc32))
+		writele(w.io, uint32(f.compressedsize))
+		writele(w.io, uint32(f.uncompressedsize))
 		b = convert(Vector{Uint8}, f.name)
-		writele(w.ios, uint16(length(b)))
-		writele(w.ios, uint16(0))
-		writele(w.ios, uint16(0))
-		writele(w.ios, uint16(0))
-		writele(w.ios, uint16(0))
-		writele(w.ios, uint32(0))
-		writele(w.ios, uint32(f.offset))
-		writele(w.ios, b)
+		writele(w.io, uint16(length(b)))
+		writele(w.io, uint16(0))
+		writele(w.io, uint16(0))
+		writele(w.io, uint16(0))
+		writele(w.io, uint16(0))
+		writele(w.io, uint32(0))
+		writele(w.io, uint32(f.offset))
+		writele(w.io, b)
 		cdsize += 46+length(b)
 	end
 	
 	# write end of central directory
-	writele(w.ios, uint32(EndCentralDirSig))
-	writele(w.ios, uint16(0))
-	writele(w.ios, uint16(0))
-	writele(w.ios, uint16(length(w.files)))
-	writele(w.ios, uint16(length(w.files)))
-	writele(w.ios, uint32(cdsize))
-	writele(w.ios, uint32(cdpos))
-	writele(w.ios, uint16(0))
+	writele(w.io, uint32(EndCentralDirSig))
+	writele(w.io, uint16(0))
+	writele(w.io, uint16(0))
+	writele(w.io, uint16(length(w.files)))
+	writele(w.io, uint16(length(w.files)))
+	writele(w.io, uint32(cdsize))
+	writele(w.io, uint32(cdpos))
+	writele(w.io, uint16(0))
 	
-	close(w.ios)
+	close(w.io)
 end
 
 function close(wf::WritableFile)
@@ -244,27 +244,27 @@ function close(wf::WritableFile)
 	wf.closed = true
 	
 	# fill in local file header fillers
-	seek(wf.f.ios, wf.f.offset+14)	# seek to CRC-32
-	writele(wf.f.ios, uint32(wf.f.crc32))
-	writele(wf.f.ios, uint32(wf.f.compressedsize))
-	writele(wf.f.ios, uint32(wf.f.uncompressedsize))
-	seekend(wf.f.ios)
+	seek(wf.f.io, wf.f.offset+14)	# seek to CRC-32
+	writele(wf.f.io, uint32(wf.f.crc32))
+	writele(wf.f.io, uint32(wf.f.compressedsize))
+	writele(wf.f.io, uint32(wf.f.uncompressedsize))
+	seekend(wf.f.io)
 end
 
 function readbytes(f::File)
-	seek(f.ios, f.offset)
-	if readle(f.ios, Uint32) != LocalFileHdrSig
+	seek(f.io, f.offset)
+	if readle(f.io, Uint32) != LocalFileHdrSig
 		error("invalid file header")
 	end
-	skip(f.ios, 2+2+2+2+2+4+4+4)
-	filelen = readle(f.ios, Uint16)
-	extralen = readle(f.ios, Uint16)
-	skip(f.ios, filelen+extralen)
+	skip(f.io, 2+2+2+2+2+4+4+4)
+	filelen = readle(f.io, Uint16)
+	extralen = readle(f.io, Uint16)
+	skip(f.io, filelen+extralen)
 	data = None
 	if f.method == Store
-		data = read(f.ios, Uint8, f.uncompressedsize)
+		data = read(f.io, Uint8, f.uncompressedsize)
 	elseif f.method == Deflate
-		data = Zlib.decompress(read(f.ios, Uint8, f.compressedsize), true)
+		data = Zlib.decompress(read(f.io, Uint8, f.compressedsize), true)
 	else
 		error("unknown compression method $(f.method)")
 	end
@@ -289,23 +289,23 @@ function addfile(w::Writer, name::String; method::Integer=Store, mtime::Float64=
 		mtime = time()
 	end
 	dostime, dosdate = msdostime(mtime)
-	f = File(w.ios, name, uint16(method), dostime, dosdate,
-		uint32(0), uint32(0), uint32(0), uint32(position(w.ios)))
+	f = File(w.io, name, uint16(method), dostime, dosdate,
+		uint32(0), uint32(0), uint32(0), uint32(position(w.io)))
 	
 	# Write local file header. Missing entries will be filled in later.
-	writele(w.ios, uint32(LocalFileHdrSig))
-	writele(w.ios, uint16(ZipVersion))
-	writele(w.ios, uint16(0))
-	writele(w.ios, uint16(f.method))
-	writele(w.ios, uint16(f.dostime))
-	writele(w.ios, uint16(f.dosdate))
-	writele(w.ios, uint32(f.crc32))	# filler
-	writele(w.ios, uint32(f.compressedsize))	# filler
-	writele(w.ios, uint32(f.uncompressedsize))	# filler
+	writele(w.io, uint32(LocalFileHdrSig))
+	writele(w.io, uint16(ZipVersion))
+	writele(w.io, uint16(0))
+	writele(w.io, uint16(f.method))
+	writele(w.io, uint16(f.dostime))
+	writele(w.io, uint16(f.dosdate))
+	writele(w.io, uint32(f.crc32))	# filler
+	writele(w.io, uint32(f.compressedsize))	# filler
+	writele(w.io, uint32(f.uncompressedsize))	# filler
 	b = convert(Vector{Uint8}, f.name)
-	writele(w.ios, uint16(length(b)))
-	writele(w.ios, uint16(0))
-	writele(w.ios, b)
+	writele(w.io, uint16(length(b)))
+	writele(w.io, uint16(0))
+	writele(w.io, b)
 
 	w.files = [w.files, f]
 	w.current = WritableFile(f)
@@ -323,7 +323,7 @@ function write(wf::WritableFile, data::Vector{Uint8})
 	if wf.f.method == Deflate
 		data = Zlib.compress(data, false, true)
 	end
-	n = write(wf.f.ios, data)
+	n = write(wf.f.io, data)
 	wf.f.compressedsize += n
 	n
 end
