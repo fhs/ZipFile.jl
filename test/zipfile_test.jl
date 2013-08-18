@@ -16,7 +16,7 @@ end
 
 
 # test a zip file created using Info-Zip
-dir = ZipFile.open(joinpath(Pkg.dir("ZipFile"), "test/ziptest.zip"))
+dir = ZipFile.Reader(joinpath(Pkg.dir("ZipFile"), "test/ziptest.zip"))
 @test length(dir.files) == 4
 
 f = findfile(dir, "ziptest/")
@@ -43,7 +43,7 @@ println("temporary directory $tmp")
 # write an empty zip file
 dir = ZipFile.Writer("$tmp/empty.zip")
 close(dir)
-dir = ZipFile.open("$tmp/empty.zip")
+dir = ZipFile.Reader("$tmp/empty.zip")
 @test length(dir.files) == 0
 
 
@@ -63,7 +63,7 @@ for (name, data, meth) in zipdata
 end
 close(dir)
 
-dir = ZipFile.open("$tmp/hello.zip")
+dir = ZipFile.Reader("$tmp/hello.zip")
 for (name, data, meth) in zipdata
 	f = findfile(dir, name)
 	@test f.method == meth

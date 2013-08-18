@@ -30,21 +30,21 @@ type File
 	offset :: Uint32
 end
 
-type Dir
+type Reader
 	ios :: IOStream
 	files :: Vector{File}
 	comment :: String
 	
-	Dir(ios::IOStream, files::Vector{File}, comment::String) =
+	Reader(ios::IOStream, files::Vector{File}, comment::String) =
 		(x = new(ios, files, comment); finalizer(x, close); x)
 end
 
-function Dir(filename::String)
+function Reader(filename::String)
 	ios = Base.open(filename)
 	endoff = find_enddiroffset(ios)
 	diroff, nfiles, comment = find_diroffset(ios, endoff)
 	files = getfiles(ios, diroff, nfiles)
-	Dir(ios, files, comment)
+	Reader(ios, files, comment)
 end
 
 type WritableFile
@@ -58,18 +58,18 @@ end
 WritableFile(f::File) = WritableFile(f, false, false)
 
 type Writer
-	d :: Dir
+	d :: Reader
 	current :: Union(WritableFile, Nothing)
 	closed :: Bool
 	
-	Writer(d::Dir, current::Union(WritableFile, Nothing), closed::Bool) =
+	Writer(d::Reader, current::Union(WritableFile, Nothing), closed::Bool) =
 		(x = new(d, current, closed); finalizer(x, close); x)
 end
-Writer(d::Dir) = Writer(d, nothing, false)
+Writer(d::Reader) = Writer(d, nothing, false)
 
 function Writer(filename::String)
 	ios = Base.open(filename, "w")
-	Writer(Dir(ios, File[], ""))
+	Writer(Reader(ios, File[], ""))
 end
 
 include("deprecated.jl")
@@ -186,7 +186,7 @@ function getfiles(ios::IOStream, diroffset::Integer, nfiles::Integer)
 	files
 end
 
-close(dir::Dir) = close(dir.ios)
+close(dir::Reader) = close(dir.ios)
 
 function close(wd::Writer)
 	if wd.closed
