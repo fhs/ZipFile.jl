@@ -39,6 +39,14 @@ type Dir
 		(x = new(ios, files, comment); finalizer(x, close); x)
 end
 
+function Dir(filename::String)
+	ios = Base.open(filename)
+	endoff = find_enddiroffset(ios)
+	diroff, nfiles, comment = find_diroffset(ios, endoff)
+	files = getfiles(ios, diroff, nfiles)
+	Dir(ios, files, comment)
+end
+
 type WritableFile
 	f :: File
 	closed :: Bool
@@ -59,6 +67,13 @@ type WritableDir
 end
 WritableDir(d::Dir) = WritableDir(d, nothing, false)
 
+function WritableDir(filename::String)
+	ios = Base.open(filename, "w")
+	WritableDir(Dir(ios, File[], ""))
+end
+
+include("deprecated.jl")
+
 readle(ios::IOStream, ::Type{Uint32}) = htol(read(ios, Uint32))
 readle(ios::IOStream, ::Type{Uint16}) = htol(read(ios, Uint16))
 
@@ -74,7 +89,7 @@ writele(ios::IOStream, x::Uint16) = writele(ios, reinterpret(Uint8, [htol(x)]))
 writele(ios::IOStream, x::Uint32) = writele(ios, reinterpret(Uint8, [htol(x)]))
 
 # For MS-DOS time/date format, see:
-# See http://msdn.microsoft.com/en-us/library/ms724247(v=VS.85).aspx
+# http://msdn.microsoft.com/en-us/library/ms724247(v=VS.85).aspx
 # Convert seconds since epoch to MS-DOS time/date, which has
 # a resolution of 2 seconds.
 function msdostime(secs)
@@ -169,18 +184,6 @@ function getfiles(ios::IOStream, diroffset::Integer, nfiles::Integer)
 			crc32, compsize, uncompsize, offset)
 	end
 	files
-end
-
-function open(filename::String, new::Bool=false)
-	if new
-		ios = Base.open(filename, "w")
-		return WritableDir(Dir(ios, File[], ""))
-	end
-	ios = Base.open(filename)
-	endoff = find_enddiroffset(ios)
-	diroff, nfiles, comment = find_diroffset(ios, endoff)
-	files = getfiles(ios, diroff, nfiles)
-	Dir(ios, files, comment)
 end
 
 close(dir::Dir) = close(dir.ios)
