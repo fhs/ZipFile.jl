@@ -41,7 +41,7 @@ tmp = mktempdir()
 println("temporary directory $tmp")
 
 # write an empty zip file
-dir = ZipFile.open("$tmp/empty.zip", true)
+dir = ZipFile.Writer("$tmp/empty.zip")
 close(dir)
 dir = ZipFile.open("$tmp/empty.zip")
 @test length(dir.files) == 0
@@ -56,7 +56,7 @@ zipdata = [
 # 2013-08-16	9:42:24
 modtime = time(TmStruct(24, 42, 9, 16, 7, 2013-1900, 0, 0, -1))
 
-dir = ZipFile.open("$tmp/hello.zip", true)
+dir = ZipFile.Writer("$tmp/hello.zip")
 for (name, data, meth) in zipdata
 	f = ZipFile.addfile(dir, name; method=meth, mtime=modtime)
 	write(f, data)
@@ -73,7 +73,7 @@ end
 close(dir)
 
 
-dir = ZipFile.open("$tmp/multi.zip", true)
+dir = ZipFile.Writer("$tmp/multi.zip")
 f = ZipFile.addfile(dir, "data"; method=ZipFile.Deflate)
 write(f, "this is an example")
 @test_throws write(f, "sentence. hello world.")

@@ -57,19 +57,19 @@ type WritableFile
 end
 WritableFile(f::File) = WritableFile(f, false, false)
 
-type WritableDir
+type Writer
 	d :: Dir
 	current :: Union(WritableFile, Nothing)
 	closed :: Bool
 	
-	WritableDir(d::Dir, current::Union(WritableFile, Nothing), closed::Bool) =
+	Writer(d::Dir, current::Union(WritableFile, Nothing), closed::Bool) =
 		(x = new(d, current, closed); finalizer(x, close); x)
 end
-WritableDir(d::Dir) = WritableDir(d, nothing, false)
+Writer(d::Dir) = Writer(d, nothing, false)
 
-function WritableDir(filename::String)
+function Writer(filename::String)
 	ios = Base.open(filename, "w")
-	WritableDir(Dir(ios, File[], ""))
+	Writer(Dir(ios, File[], ""))
 end
 
 include("deprecated.jl")
@@ -188,7 +188,7 @@ end
 
 close(dir::Dir) = close(dir.ios)
 
-function close(wd::WritableDir)
+function close(wd::Writer)
 	if wd.closed
 		return
 	end
@@ -281,7 +281,7 @@ function readall(f::File)
 	return is_valid_ascii(b) ? ASCIIString(b) : UTF8String(b)
 end
 
-function addfile(wd::WritableDir, name::String; method::Integer=Store, mtime::Float64=-1.0)
+function addfile(wd::Writer, name::String; method::Integer=Store, mtime::Float64=-1.0)
 	if !is(wd.current, nothing)
 		close(wd.current)
 		wd.current = nothing
