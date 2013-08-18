@@ -19,7 +19,7 @@ const Store = 0
 const Deflate = 8
 
 type File
-	ios :: IOStream
+	ios :: IO
 	name :: String
 	method :: Uint16
 	dostime :: Uint16
@@ -31,11 +31,11 @@ type File
 end
 
 type Reader
-	ios :: IOStream
+	ios :: IO
 	files :: Vector{File}
 	comment :: String
 	
-	Reader(ios::IOStream, files::Vector{File}, comment::String) =
+	Reader(ios::IO, files::Vector{File}, comment::String) =
 		(x = new(ios, files, comment); finalizer(x, close); x)
 end
 
@@ -58,24 +58,24 @@ end
 WritableFile(f::File) = WritableFile(f, false, false)
 
 type Writer
-	ios :: IOStream
+	ios :: IO
 	files :: Vector{File}
 	current :: Union(WritableFile, Nothing)
 	closed :: Bool
 	
-	Writer(ios::IOStream, files::Vector{File},
+	Writer(ios::IO, files::Vector{File},
 		current::Union(WritableFile, Nothing), closed::Bool) =
 		(x = new(ios, files, current, closed); finalizer(x, close); x)
 end
-Writer(ios::IOStream, files::Vector{File}) = Writer(ios, files, nothing, false)
+Writer(ios::IO, files::Vector{File}) = Writer(ios, files, nothing, false)
 Writer(filename::String) = Writer(Base.open(filename, "w"), File[])
 
 include("deprecated.jl")
 
-readle(ios::IOStream, ::Type{Uint32}) = htol(read(ios, Uint32))
-readle(ios::IOStream, ::Type{Uint16}) = htol(read(ios, Uint16))
+readle(ios::IO, ::Type{Uint32}) = htol(read(ios, Uint32))
+readle(ios::IO, ::Type{Uint16}) = htol(read(ios, Uint16))
 
-function writele(ios::IOStream, x::Vector{Uint8})
+function writele(ios::IO, x::Vector{Uint8})
 	n = write(ios, x)
 	if n != length(x)
 		error("short write")
@@ -83,8 +83,8 @@ function writele(ios::IOStream, x::Vector{Uint8})
 	n
 end
 
-writele(ios::IOStream, x::Uint16) = writele(ios, reinterpret(Uint8, [htol(x)]))
-writele(ios::IOStream, x::Uint32) = writele(ios, reinterpret(Uint8, [htol(x)]))
+writele(ios::IO, x::Uint16) = writele(ios, reinterpret(Uint8, [htol(x)]))
+writele(ios::IO, x::Uint32) = writele(ios, reinterpret(Uint8, [htol(x)]))
 
 # For MS-DOS time/date format, see:
 # http://msdn.microsoft.com/en-us/library/ms724247(v=VS.85).aspx
@@ -108,7 +108,7 @@ function mtime(f::File)
 	time(TmStruct(sec, min, hour, mday, month, year, 0, 0, -1))
 end
 
-function find_enddiroffset(ios::IOStream)
+function find_enddiroffset(ios::IO)
 	seekend(ios)
 	filesize = position(ios)
 	offset = None
@@ -136,7 +136,7 @@ function find_enddiroffset(ios::IOStream)
 	offset
 end
 
-function find_diroffset(ios::IOStream, enddiroffset::Integer)
+function find_diroffset(ios::IO, enddiroffset::Integer)
 	seek(ios, enddiroffset)
 	if readle(ios, Uint32) != EndCentralDirSig
 		error("internal error")
@@ -150,7 +150,7 @@ function find_diroffset(ios::IOStream, enddiroffset::Integer)
 	offset, nfiles, comment
 end
 
-function getfiles(ios::IOStream, diroffset::Integer, nfiles::Integer)
+function getfiles(ios::IO, diroffset::Integer, nfiles::Integer)
 	seek(ios, diroffset)
 	files = Array(File, nfiles)
 	for i in 1:nfiles
