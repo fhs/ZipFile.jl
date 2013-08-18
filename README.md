@@ -15,7 +15,7 @@ Write a new ZIP file:
 ```julia
 using ZipFile
 
-dir = ZipFile.open("example.zip", true);
+dir = ZipFile.Writer("example.zip");
 f = ZipFile.addfile(dir, "hello.txt");
 write(f, "hello world!\n");
 f = ZipFile.addfile(dir, "julia.txt", method=ZipFile.Deflate);
@@ -26,7 +26,7 @@ close(dir)
 Read and print out the contents of a ZIP file:
 
 ```julia
-dir = ZipFile.open("example.zip");
+dir = ZipFile.Reader("example.zip");
 for f in dir.files
 	println("Filename: $(f.name)")
 	write(readall(f));
