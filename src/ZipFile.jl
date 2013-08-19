@@ -3,10 +3,10 @@ module ZipFile
 # ZIP file format is described in
 # http://www.pkware.com/documents/casestudies/APPNOTE.TXT
 
-import Base: readall, write, close, mtime
+import Base: readall, write, close, mtime, position
 import Zlib
 
-export readall, write, close, mtime
+export readall, write, close, mtime, position
 
 # TODO: ZIP64 support, data descriptor support
 # TODO: support partial read of File
@@ -28,6 +28,17 @@ type File
 	compressedsize :: Uint32
 	uncompressedsize :: Uint32
 	offset :: Uint32
+	
+	function File(io::IO, name::String, method::Uint16, dostime::Uint16,
+			dosdate::Uint16, crc32::Uint32, compressedsize::Uint32,
+			uncompressedsize::Uint32, offset::Uint32)
+		if method != Store && method != Deflate
+			error("unknown compression method $method")
+		end
+		new(io, name, method, dostime, dosdate, crc32,
+			compressedsize, uncompressedsize, offset)
+	end
+		
 end
 
 type Reader
@@ -47,15 +58,16 @@ function Reader(filename::String)
 	Reader(io, files, comment)
 end
 
-type WritableFile
+type WritableFile <: IO
+	io :: IO		# wrapper IO for Deflate, etc.
 	f :: File
 	closed :: Bool
-	dirty :: Bool
+	startpos :: Int64	# position where data begins
 	
-	WritableFile(f::File, closed::Bool, dirty::Bool) =
-		(x = new(f, closed, dirty); finalizer(x, close); x)
+	WritableFile(io::IO, f::File, closed::Bool, startpos::Int64) =
+		(x = new(io, f, closed, startpos); finalizer(x, close); x)
 end
-WritableFile(f::File) = WritableFile(f, false, false)
+WritableFile(io::IO, f::File) = WritableFile(io, f, false, position(f.io))
 
 type Writer
 	io :: IO
@@ -71,6 +83,7 @@ Writer(io::IO, files::Vector{File}) = Writer(io, files, nothing, false)
 Writer(filename::String) = Writer(Base.open(filename, "w"), File[])
 
 include("deprecated.jl")
+include("iojunk.jl")
 
 readle(io::IO, ::Type{Uint32}) = htol(read(io, Uint32))
 readle(io::IO, ::Type{Uint16}) = htol(read(io, Uint16))
@@ -243,6 +256,11 @@ function close(wf::WritableFile)
 	end
 	wf.closed = true
 	
+	if wf.f.method == Deflate
+		close(wf.io)
+	end
+	wf.f.compressedsize = position(wf)
+	
 	# fill in local file header fillers
 	seek(wf.f.io, wf.f.offset+14)	# seek to CRC-32
 	writele(wf.f.io, uint32(wf.f.crc32))
@@ -308,26 +326,26 @@ function addfile(w::Writer, name::String; method::Integer=Store, mtime::Float64=
 	writele(w.io, b)
 
 	w.files = [w.files, f]
-	w.current = WritableFile(f)
+	if f.method == Store
+		w.current = WritableFile(f.io, f)
+	elseif f.method == Deflate
+		w.current = WritableFile(Zlib.Writer(f.io, false, true), f)
+	end
 	w.current
 end
 
-function write(wf::WritableFile, data::Vector{Uint8})
-	if wf.f.method == Deflate && wf.dirty
-		error("multiple deflate writes not supported")
-	end
-	wf.dirty = true
-	
-	wf.f.uncompressedsize += length(data)
-	wf.f.crc32 = Zlib.crc32(data, wf.f.crc32)
-	if wf.f.method == Deflate
-		data = Zlib.compress(data, false, true)
-	end
-	n = write(wf.f.io, data)
-	wf.f.compressedsize += n
-	n
+function position(wf::WritableFile)
+	position(wf.f.io) - wf.startpos
 end
 
-write(wf::WritableFile, data::String) = write(wf, convert(Vector{Uint8}, data))
+function write(wf::WritableFile, p::Ptr, nb::Integer)
+	n = write(wf.io, p, nb)
+	if n != nb
+		error("short write")
+	end
+	wf.f.crc32 = Zlib.crc32(pointer_to_array(p, nb), wf.f.crc32)
+	wf.f.uncompressedsize += n
+	n
+end
 
 end # module

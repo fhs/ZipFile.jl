@@ -76,7 +76,11 @@ close(dir)
 dir = ZipFile.Writer("$tmp/multi.zip")
 f = ZipFile.addfile(dir, "data"; method=ZipFile.Deflate)
 write(f, "this is an example")
-@test_throws write(f, "sentence. hello world.")
+write(f, " sentence. hello world.\n")
+close(dir)
+dir = ZipFile.Reader("$tmp/multi.zip")
+f = dir.files[1]
+@test fileequals(f, "this is an example sentence. hello world.\n")
 close(dir)
 
 
