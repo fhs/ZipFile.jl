@@ -1,6 +1,8 @@
 using Base.Test
 using ZipFile
 
+Debug = false
+
 function findfile(dir, name)
 	for f in dir.files
 		if f.name == name
@@ -38,7 +40,9 @@ close(dir)
 
 
 tmp = mktempdir()
-println("temporary directory $tmp")
+if Debug
+	println("temporary directory $tmp")
+end
 
 # write an empty zip file
 dir = ZipFile.Writer("$tmp/empty.zip")
@@ -73,15 +77,58 @@ end
 close(dir)
 
 
-dir = ZipFile.Writer("$tmp/multi.zip")
+s1 = "this is an example sentence"
+s2 = ". hello world.\n"
+filename = "$tmp/multi.zip"
+dir = ZipFile.Writer(filename)
 f = ZipFile.addfile(dir, "data"; method=ZipFile.Deflate)
-write(f, "this is an example")
-write(f, " sentence. hello world.\n")
+write(f, s1)
+write(f, s2)
 close(dir)
-dir = ZipFile.Reader("$tmp/multi.zip")
-f = dir.files[1]
-@test fileequals(f, "this is an example sentence. hello world.\n")
+dir = ZipFile.Reader(filename)
+@test ascii(read(dir.files[1], Uint8, length(s1))) == s1
+@test ascii(read(dir.files[1], Uint8, length(s2))) == s2
+@test eof(dir.files[1])
 close(dir)
 
 
-run(`rm -rf $tmp`)
+data = {
+    uint8(20),
+    int(42),
+    float(3.14),
+    "julia",
+    rand(5),
+    rand(3, 4),
+    sub(rand(10,10), 2:8,2:4),
+}
+filename = "$tmp/multi2.zip"
+dir = ZipFile.Writer(filename)
+f = ZipFile.addfile(dir, "data"; method=ZipFile.Deflate)
+@test_throws read(f, Uint8, 1)
+for x in data
+    write(f, x)
+end
+close(dir)
+
+dir = ZipFile.Reader(filename)
+@test_throws write(dir.files[1], uint8(20))
+for x in data
+    if typeof(x) == ASCIIString
+        @test x == ASCIIString(read(dir.files[1], Uint8, length(x)))
+    elseif typeof(x) <: Array
+        y = similar(x)
+        y[:] = 0
+        @test x == read(dir.files[1], y)
+        @test x == y
+    elseif typeof(x) <: SubArray
+        continue # Base knows how to write, but not read
+    else
+        @test x == read(dir.files[1], typeof(x))
+    end
+end
+close(dir)
+
+
+if !Debug
+	run(`rm -rf $tmp`)
+end

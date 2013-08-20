@@ -3,10 +3,10 @@ module ZipFile
 # ZIP file format is described in
 # http://www.pkware.com/documents/casestudies/APPNOTE.TXT
 
-import Base: readall, write, close, mtime, position
+import Base: read, eof, write, close, mtime, position
 import Zlib
 
-export readall, write, close, mtime, position
+export read, eof, write, close, mtime, position
 
 # TODO: ZIP64 support, data descriptor support
 # TODO: support partial read of File
@@ -18,7 +18,7 @@ const ZipVersion = 20
 const Store = 0
 const Deflate = 8
 
-type File
+type File <: IO
 	io :: IO
 	name :: String
 	method :: Uint16
@@ -28,6 +28,11 @@ type File
 	compressedsize :: Uint32
 	uncompressedsize :: Uint32
 	offset :: Uint32
+	_currentcrc32 :: Uint32
+	_pos :: Int64		# uncompressed position
+	_zpos :: Int64		# compressed position
+	_dataoffset :: Int64
+	_dataio :: IO
 	
 	function File(io::IO, name::String, method::Uint16, dostime::Uint16,
 			dosdate::Uint16, crc32::Uint32, compressedsize::Uint32,
@@ -36,9 +41,8 @@ type File
 			error("unknown compression method $method")
 		end
 		new(io, name, method, dostime, dosdate, crc32,
-			compressedsize, uncompressedsize, offset)
+			compressedsize, uncompressedsize, offset, 0, 0, 0, -1)
 	end
-		
 end
 
 type Reader
@@ -269,32 +273,48 @@ function close(wf::WritableFile)
 	seekend(wf.f.io)
 end
 
-function readbytes(f::File)
-	seek(f.io, f.offset)
-	if readle(f.io, Uint32) != LocalFileHdrSig
-		error("invalid file header")
+function read{T}(f::File, a::Array{T})
+	if !isbits(T)
+		return invoke(read, (IO, Array), s, a)
 	end
-	skip(f.io, 2+2+2+2+2+4+4+4)
-	filelen = readle(f.io, Uint16)
-	extralen = readle(f.io, Uint16)
-	skip(f.io, filelen+extralen)
-	data = None
-	if f.method == Store
-		data = read(f.io, Uint8, f.uncompressedsize)
-	elseif f.method == Deflate
-		data = Zlib.decompress(read(f.io, Uint8, f.compressedsize), true)
-	else
-		error("unknown compression method $(f.method)")
+	
+	if f._dataoffset < 0
+		seek(f.io, f.offset)
+		if readle(f.io, Uint32) != LocalFileHdrSig
+			error("invalid file header")
+		end
+		skip(f.io, 2+2+2+2+2+4+4+4)
+		filelen = readle(f.io, Uint16)
+		extralen = readle(f.io, Uint16)
+		skip(f.io, filelen+extralen)
+		if f.method == Deflate
+			f._dataio = Zlib.Reader(f.io, true)
+		elseif f.method == Store
+			f._dataio = f.io
+		end
+		f._dataoffset = position(f.io)
 	end
-	if Zlib.crc32(data) != f.crc32
+	
+	if f._pos+length(a)*sizeof(T) > f.uncompressedsize
+		throw(EOFError())
+	end
+	
+	seek(f.io, f._dataoffset+f._zpos)
+	b = reinterpret(Uint8, reshape(a, length(a)))
+	read(f._dataio, b)
+	f._zpos = position(f.io) - f._dataoffset
+	f._pos += length(b)
+	f._currentcrc32 = Zlib.crc32(b, f._currentcrc32)
+	
+	# check CRC32 if we've reached EOF
+	if eof(f) && f._currentcrc32 != f.crc32
 		error("crc32 do not match")
 	end
-	data
+	a
 end
 
-function readall(f::File)
-	b = readbytes(f)
-	return is_valid_ascii(b) ? ASCIIString(b) : UTF8String(b)
+function eof(f::File)
+	f._pos >= f.uncompressedsize
 end
 
 function addfile(w::Writer, name::String; method::Integer=Store, mtime::Float64=-1.0)
@@ -343,7 +363,10 @@ function write(wf::WritableFile, p::Ptr, nb::Integer)
 	if n != nb
 		error("short write")
 	end
-	wf.f.crc32 = Zlib.crc32(pointer_to_array(p, nb), wf.f.crc32)
+	
+	a = pointer_to_array(p, nb)
+	b = reinterpret(Uint8, reshape(a, length(a)))
+	wf.f.crc32 = Zlib.crc32(b, wf.f.crc32)
 	wf.f.uncompressedsize += n
 	n
 end
