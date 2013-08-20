@@ -9,7 +9,6 @@ import Zlib
 export read, eof, write, close, mtime, position
 
 # TODO: ZIP64 support, data descriptor support
-# TODO: support partial read of File
 
 const LocalFileHdrSig   = 0x04034b50
 const CentralDirSig     = 0x02014b50
@@ -295,7 +294,7 @@ function read{T}(f::File, a::Array{T})
 		f._dataoffset = position(f.io)
 	end
 	
-	if f._pos+length(a)*sizeof(T) > f.uncompressedsize
+	if eof(f) || f._pos+length(a)*sizeof(T) > f.uncompressedsize
 		throw(EOFError())
 	end
 	
@@ -306,9 +305,13 @@ function read{T}(f::File, a::Array{T})
 	f._pos += length(b)
 	f._currentcrc32 = Zlib.crc32(b, f._currentcrc32)
 	
-	# check CRC32 if we've reached EOF
-	if eof(f) && f._currentcrc32 != f.crc32
-		error("crc32 do not match")
+	if eof(f)
+		if f.method == Deflate
+			close(f._dataio)
+		end
+		if  f._currentcrc32 != f.crc32
+			error("crc32 do not match")
+		end
 	end
 	a
 end
