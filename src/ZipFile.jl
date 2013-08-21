@@ -3,10 +3,10 @@ module ZipFile
 # ZIP file format is described in
 # http://www.pkware.com/documents/casestudies/APPNOTE.TXT
 
-import Base: read, eof, write, close, mtime, position
+import Base: read, eof, write, close, mtime, position, show
 import Zlib
 
-export read, eof, write, close, mtime, position
+export read, eof, write, close, mtime, position, show
 
 # TODO: ZIP64 support, data descriptor support
 
@@ -16,6 +16,7 @@ const EndCentralDirSig  = 0x06054b50
 const ZipVersion = 20
 const Store = 0
 const Deflate = 8
+const Method2Str = [Store => "Store", Deflate => "Deflate"]
 
 type ReadableFile <: IO
 	io :: IO
@@ -106,6 +107,21 @@ end
 Writer(io::IO) = Writer(io, WritableFile[], nothing, false)
 Writer(filename::String) = Writer(Base.open(filename, "w"))
 
+function show(io::IO, f::Union(ReadableFile, WritableFile))
+	print("$(string(typeof(f)))(name=$(f.name), method=$(Method2Str[f.method]), uncompresssedsize=$(f.uncompressedsize), compressedsize=$(f.compressedsize), mtime=$(mtime(f)))")
+end
+
+function show(io::IO, rw::Union(Reader, Writer))
+	println("$(string(typeof(rw))) for $(rw.io) containing $(length(rw.files)) files:\n")
+	@printf("%16s %-7s %-16s %s\n", "uncompressedsize", "method", "mtime", "name")
+	println("-"^(16+1+7+1+16+1+4))
+	for f in rw.files
+		@printf("%16d %-7s %-16s %s\n",
+			f.uncompressedsize, Method2Str[f.method],
+			strftime("%Y-%m-%d %H-%M", mtime(f)), f.name)
+	end
+end
+
 include("deprecated.jl")
 include("iojunk.jl")
 
@@ -135,15 +151,17 @@ function msdostime(secs)
 end
 
 # Convert MS-DOS time/date to seconds since epoch
-function mtime(f::ReadableFile)
-	sec = 2*(f.dostime & 0x1f)
-	min = (f.dostime>>5) & 0x3f
-	hour = f.dostime>>11
-	mday = f.dosdate & 0x1f
-	month = ((f.dosdate>>5) & 0xf) - 1
-	year = (f.dosdate>>9) + 1980 - 1900
+function mtime(dostime::Uint16, dosdate::Uint16)
+	sec = 2*(dostime & 0x1f)
+	min = (dostime>>5) & 0x3f
+	hour = dostime>>11
+	mday = dosdate & 0x1f
+	month = ((dosdate>>5) & 0xf) - 1
+	year = (dosdate>>9) + 1980 - 1900
 	time(TmStruct(sec, min, hour, mday, month, year, 0, 0, -1))
 end
+
+mtime(f::Union(ReadableFile, WritableFile)) = mtime(f.dostime, f.dosdate)
 
 function find_enddiroffset(io::IO)
 	seekend(io)
