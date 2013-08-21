@@ -18,7 +18,7 @@ end
 
 
 # test a zip file created using Info-Zip
-dir = ZipFile.Reader(joinpath(Pkg.dir("ZipFile"), "test/ziptest.zip"))
+dir = ZipFile.Reader(joinpath(Pkg.dir("ZipFile"), "test/infozip.zip"))
 @test length(dir.files) == 4
 
 f = findfile(dir, "ziptest/")

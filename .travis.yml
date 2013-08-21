@@ -15,4 +15,4 @@ script:
     - sh -c 'cd ~/.julia/Zlib && git checkout 6398b78240ee36c08258fd7758fcdf017025f0d3'
     - mkdir -p ~/.julia/ZipFile
     - cp -R ./* ~/.julia/ZipFile/
-    - julia ~/.julia/ZipFile/test/zipfile_test.jl
+    - julia ~/.julia/ZipFile/test/test.jl
