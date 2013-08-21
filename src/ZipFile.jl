@@ -97,12 +97,13 @@ type Writer
 	current :: Union(WritableFile, Nothing)
 	closed :: Bool
 	
-	Writer(io::IO, files::Vector{ReadableFile},
+	Writer(io::IO, files::Vector{WritableFile},
 		current::Union(WritableFile, Nothing), closed::Bool) =
 		(x = new(io, files, current, closed); finalizer(x, close); x)
 end
-Writer(io::IO, files::Vector{ReadableFile}) = Writer(io, files, nothing, false)
-Writer(filename::String) = Writer(Base.open(filename, "w"), ReadableFile[])
+function Writer(filename::String)
+	Writer(Base.open(filename, "w"), WritableFile[], nothing, false)
+end
 
 include("deprecated.jl")
 include("iojunk.jl")
