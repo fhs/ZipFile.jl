@@ -30,7 +30,7 @@ type ReadableFile <: IO
 	_currentcrc32 :: Uint32
 	_pos :: Int64		# uncompressed position
 	_zpos :: Int64		# compressed position
-	_dataoffset :: Int64
+	_datapos :: Int64	# position where data begins
 	_dataio :: IO
 	
 	function ReadableFile(io::IO, name::String, method::Uint16, dostime::Uint16,
@@ -65,10 +65,10 @@ type WritableFile <: IO
 	io :: IO		# wrapper IO for Deflate, etc.
 	f :: ReadableFile
 	closed :: Bool
-	startpos :: Int64	# position where data begins
+	_datapos :: Int64	# position where data begins
 	
-	WritableFile(io::IO, f::ReadableFile, closed::Bool, startpos::Int64) =
-		(x = new(io, f, closed, startpos); finalizer(x, close); x)
+	WritableFile(io::IO, f::ReadableFile, closed::Bool, _datapos::Int64) =
+		(x = new(io, f, closed, _datapos); finalizer(x, close); x)
 end
 WritableFile(io::IO, f::ReadableFile) = WritableFile(io, f, false, position(f.io))
 
@@ -277,7 +277,7 @@ function read{T}(f::ReadableFile, a::Array{T})
 		return invoke(read, (IO, Array), s, a)
 	end
 	
-	if f._dataoffset < 0
+	if f._datapos < 0
 		seek(f.io, f.offset)
 		if readle(f.io, Uint32) != LocalFileHdrSig
 			error("invalid file header")
@@ -291,17 +291,17 @@ function read{T}(f::ReadableFile, a::Array{T})
 		elseif f.method == Store
 			f._dataio = f.io
 		end
-		f._dataoffset = position(f.io)
+		f._datapos = position(f.io)
 	end
 	
 	if eof(f) || f._pos+length(a)*sizeof(T) > f.uncompressedsize
 		throw(EOFError())
 	end
 	
-	seek(f.io, f._dataoffset+f._zpos)
+	seek(f.io, f._datapos+f._zpos)
 	b = reinterpret(Uint8, reshape(a, length(a)))
 	read(f._dataio, b)
-	f._zpos = position(f.io) - f._dataoffset
+	f._zpos = position(f.io) - f._datapos
 	f._pos += length(b)
 	f._currentcrc32 = Zlib.crc32(b, f._currentcrc32)
 	
@@ -358,7 +358,7 @@ function addfile(w::Writer, name::String; method::Integer=Store, mtime::Float64=
 end
 
 function position(wf::WritableFile)
-	position(wf.f.io) - wf.startpos
+	position(wf.f.io) - wf._datapos
 end
 
 function write(wf::WritableFile, p::Ptr, nb::Integer)
