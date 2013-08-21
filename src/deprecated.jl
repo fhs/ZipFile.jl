@@ -1,3 +1,5 @@
 
-@deprecate open(filename::String)	Reader(filename)
-@deprecate open(filename::String, new::Bool)	(new? Writer(filename) : Reader(filename))
+function open(filename::String, new::Bool=false)
+	Base.warn_once("ZipFile.open is deprecated, use ZipFile.Reader or ZipFile.Writer.")
+	new ? Writer(filename) : Reader(filename)
+end
