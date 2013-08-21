@@ -54,13 +54,14 @@ type Reader
 		(x = new(io, files, comment); finalizer(x, close); x)
 end
 
-function Reader(filename::String)
-	io = Base.open(filename)
+function Reader(io::IO)
 	endoff = find_enddiroffset(io)
 	diroff, nfiles, comment = find_diroffset(io, endoff)
 	files = getfiles(io, diroff, nfiles)
 	Reader(io, files, comment)
 end
+
+Reader(filename::String) = Reader(Base.open(filename))
 
 type WritableFile <: IO
 	io :: IO
@@ -84,10 +85,10 @@ type WritableFile <: IO
 		if method != Store && method != Deflate
 			error("unknown compression method $method")
 		end
-		wf = new(io, name, method, dostime, dosdate, crc32,
+		f = new(io, name, method, dostime, dosdate, crc32,
 			compressedsize, uncompressedsize, offset, _datapos, _zio, closed)
-		finalizer(wf, close)
-		wf
+		finalizer(f, close)
+		f
 	end
 end
 
@@ -101,9 +102,9 @@ type Writer
 		current::Union(WritableFile, Nothing), closed::Bool) =
 		(x = new(io, files, current, closed); finalizer(x, close); x)
 end
-function Writer(filename::String)
-	Writer(Base.open(filename, "w"), WritableFile[], nothing, false)
-end
+
+Writer(io::IO) = Writer(io, WritableFile[], nothing, false)
+Writer(filename::String) = Writer(Base.open(filename, "w"))
 
 include("deprecated.jl")
 include("iojunk.jl")
@@ -273,24 +274,26 @@ function close(w::Writer)
 	close(w.io)
 end
 
-function close(wf::WritableFile)
-	if wf.closed
+function close(f::WritableFile)
+	if f.closed
 		return
 	end
-	wf.closed = true
+	f.closed = true
 	
-	if wf.method == Deflate
-		close(wf._zio)
+	if f.method == Deflate
+		close(f._zio)
 	end
-	wf.compressedsize = position(wf)
+	f.compressedsize = position(f)
 	
 	# fill in local file header fillers
-	seek(wf.io, wf.offset+14)	# seek to CRC-32
-	writele(wf.io, uint32(wf.crc32))
-	writele(wf.io, uint32(wf.compressedsize))
-	writele(wf.io, uint32(wf.uncompressedsize))
-	seekend(wf.io)
+	seek(f.io, f.offset+14)	# seek to CRC-32
+	writele(f.io, uint32(f.crc32))
+	writele(f.io, uint32(f.compressedsize))
+	writele(f.io, uint32(f.uncompressedsize))
+	seekend(f.io)
 end
+
+close(f::ReadableFile) = nothing
 
 function read{T}(f::ReadableFile, a::Array{T})
 	if !isbits(T)
@@ -378,20 +381,19 @@ function addfile(w::Writer, name::String; method::Integer=Store, mtime::Float64=
 	w.current
 end
 
-function position(wf::WritableFile)
-	position(wf.io) - wf._datapos
-end
+position(f::WritableFile) = position(f.io) - f._datapos
+position(f::ReadableFile) = f._pos
 
-function write(wf::WritableFile, p::Ptr, nb::Integer)
-	n = write(wf._zio, p, nb)
+function write(f::WritableFile, p::Ptr, nb::Integer)
+	n = write(f._zio, p, nb)
 	if n != nb
 		error("short write")
 	end
 	
 	a = pointer_to_array(p, nb)
 	b = reinterpret(Uint8, reshape(a, length(a)))
-	wf.crc32 = Zlib.crc32(b, wf.crc32)
-	wf.uncompressedsize += n
+	f.crc32 = Zlib.crc32(b, f.crc32)
+	f.uncompressedsize += n
 	n
 end
 
