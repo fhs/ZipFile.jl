@@ -27,11 +27,12 @@ type ReadableFile <: IO
 	compressedsize :: Uint32
 	uncompressedsize :: Uint32
 	offset :: Uint32
+	_datapos :: Int64   # position where data begins
+	_zio :: IO          # compression IO
+
 	_currentcrc32 :: Uint32
 	_pos :: Int64       # current position in uncompressed data
 	_zpos :: Int64      # current position in compressed data
-	_datapos :: Int64   # position where data begins
-	_zio :: IO          # compression IO
 	
 	function ReadableFile(io::IO, name::String, method::Uint16, dostime::Uint16,
 			dosdate::Uint16, crc32::Uint32, compressedsize::Uint32,
@@ -40,7 +41,7 @@ type ReadableFile <: IO
 			error("unknown compression method $method")
 		end
 		new(io, name, method, dostime, dosdate, crc32,
-			compressedsize, uncompressedsize, offset, 0, 0, 0, -1)
+			compressedsize, uncompressedsize, offset, -1, io, 0, 0, 0)
 	end
 end
 
@@ -62,19 +63,37 @@ function Reader(filename::String)
 end
 
 type WritableFile <: IO
-	_zio :: IO          # compression IO
-	f :: ReadableFile
-	closed :: Bool
+	io :: IO
+	name :: String
+	method :: Uint16
+	dostime :: Uint16
+	dosdate :: Uint16
+	crc32 :: Uint32
+	compressedsize :: Uint32
+	uncompressedsize :: Uint32
+	offset :: Uint32
 	_datapos :: Int64   # position where data begins
+	_zio :: IO          # compression IO
 	
-	WritableFile(io::IO, f::ReadableFile, closed::Bool, _datapos::Int64) =
-		(x = new(io, f, closed, _datapos); finalizer(x, close); x)
+	closed :: Bool
+	
+	function WritableFile(io::IO, name::String, method::Uint16, dostime::Uint16,
+			dosdate::Uint16, crc32::Uint32, compressedsize::Uint32,
+			uncompressedsize::Uint32, offset::Uint32, _datapos::Int64,
+			_zio::IO, closed::Bool)
+		if method != Store && method != Deflate
+			error("unknown compression method $method")
+		end
+		wf = new(io, name, method, dostime, dosdate, crc32,
+			compressedsize, uncompressedsize, offset, _datapos, _zio, closed)
+		finalizer(wf, close)
+		wf
+	end
 end
-WritableFile(io::IO, f::ReadableFile) = WritableFile(io, f, false, position(f.io))
 
 type Writer
 	io :: IO
-	files :: Vector{ReadableFile}
+	files :: Vector{WritableFile}
 	current :: Union(WritableFile, Nothing)
 	closed :: Bool
 	
@@ -259,17 +278,17 @@ function close(wf::WritableFile)
 	end
 	wf.closed = true
 	
-	if wf.f.method == Deflate
+	if wf.method == Deflate
 		close(wf._zio)
 	end
-	wf.f.compressedsize = position(wf)
+	wf.compressedsize = position(wf)
 	
 	# fill in local file header fillers
-	seek(wf.f.io, wf.f.offset+14)	# seek to CRC-32
-	writele(wf.f.io, uint32(wf.f.crc32))
-	writele(wf.f.io, uint32(wf.f.compressedsize))
-	writele(wf.f.io, uint32(wf.f.uncompressedsize))
-	seekend(wf.f.io)
+	seek(wf.io, wf.offset+14)	# seek to CRC-32
+	writele(wf.io, uint32(wf.crc32))
+	writele(wf.io, uint32(wf.compressedsize))
+	writele(wf.io, uint32(wf.uncompressedsize))
+	seekend(wf.io)
 end
 
 function read{T}(f::ReadableFile, a::Array{T})
@@ -330,8 +349,9 @@ function addfile(w::Writer, name::String; method::Integer=Store, mtime::Float64=
 		mtime = time()
 	end
 	dostime, dosdate = msdostime(mtime)
-	f = ReadableFile(w.io, name, uint16(method), dostime, dosdate,
-		uint32(0), uint32(0), uint32(0), uint32(position(w.io)))
+	f = WritableFile(w.io, name, uint16(method), dostime, dosdate,
+		uint32(0), uint32(0), uint32(0), uint32(position(w.io)),
+		int64(-1), w.io, false)
 	
 	# Write local file header. Missing entries will be filled in later.
 	writele(w.io, uint32(LocalFileHdrSig))
@@ -348,17 +368,17 @@ function addfile(w::Writer, name::String; method::Integer=Store, mtime::Float64=
 	writele(w.io, uint16(0))
 	writele(w.io, b)
 
-	w.files = [w.files, f]
-	if f.method == Store
-		w.current = WritableFile(f.io, f)
-	elseif f.method == Deflate
-		w.current = WritableFile(Zlib.Writer(f.io, false, true), f)
+	f._datapos = position(w.io)
+	if f.method == Deflate
+		f._zio = Zlib.Writer(f.io, false, true)
 	end
+	w.files = [w.files, f]
+	w.current = f
 	w.current
 end
 
 function position(wf::WritableFile)
-	position(wf.f.io) - wf._datapos
+	position(wf.io) - wf._datapos
 end
 
 function write(wf::WritableFile, p::Ptr, nb::Integer)
@@ -369,8 +389,8 @@ function write(wf::WritableFile, p::Ptr, nb::Integer)
 	
 	a = pointer_to_array(p, nb)
 	b = reinterpret(Uint8, reshape(a, length(a)))
-	wf.f.crc32 = Zlib.crc32(b, wf.f.crc32)
-	wf.f.uncompressedsize += n
+	wf.crc32 = Zlib.crc32(b, wf.crc32)
+	wf.uncompressedsize += n
 	n
 end
 
