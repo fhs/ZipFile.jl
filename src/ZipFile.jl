@@ -17,7 +17,7 @@ const ZipVersion = 20
 const Store = 0
 const Deflate = 8
 
-type File <: IO
+type ReadableFile <: IO
 	io :: IO
 	name :: String
 	method :: Uint16
@@ -33,7 +33,7 @@ type File <: IO
 	_dataoffset :: Int64
 	_dataio :: IO
 	
-	function File(io::IO, name::String, method::Uint16, dostime::Uint16,
+	function ReadableFile(io::IO, name::String, method::Uint16, dostime::Uint16,
 			dosdate::Uint16, crc32::Uint32, compressedsize::Uint32,
 			uncompressedsize::Uint32, offset::Uint32)
 		if method != Store && method != Deflate
@@ -46,10 +46,10 @@ end
 
 type Reader
 	io :: IO
-	files :: Vector{File}
+	files :: Vector{ReadableFile}
 	comment :: String
 	
-	Reader(io::IO, files::Vector{File}, comment::String) =
+	Reader(io::IO, files::Vector{ReadableFile}, comment::String) =
 		(x = new(io, files, comment); finalizer(x, close); x)
 end
 
@@ -63,27 +63,27 @@ end
 
 type WritableFile <: IO
 	io :: IO		# wrapper IO for Deflate, etc.
-	f :: File
+	f :: ReadableFile
 	closed :: Bool
 	startpos :: Int64	# position where data begins
 	
-	WritableFile(io::IO, f::File, closed::Bool, startpos::Int64) =
+	WritableFile(io::IO, f::ReadableFile, closed::Bool, startpos::Int64) =
 		(x = new(io, f, closed, startpos); finalizer(x, close); x)
 end
-WritableFile(io::IO, f::File) = WritableFile(io, f, false, position(f.io))
+WritableFile(io::IO, f::ReadableFile) = WritableFile(io, f, false, position(f.io))
 
 type Writer
 	io :: IO
-	files :: Vector{File}
+	files :: Vector{ReadableFile}
 	current :: Union(WritableFile, Nothing)
 	closed :: Bool
 	
-	Writer(io::IO, files::Vector{File},
+	Writer(io::IO, files::Vector{ReadableFile},
 		current::Union(WritableFile, Nothing), closed::Bool) =
 		(x = new(io, files, current, closed); finalizer(x, close); x)
 end
-Writer(io::IO, files::Vector{File}) = Writer(io, files, nothing, false)
-Writer(filename::String) = Writer(Base.open(filename, "w"), File[])
+Writer(io::IO, files::Vector{ReadableFile}) = Writer(io, files, nothing, false)
+Writer(filename::String) = Writer(Base.open(filename, "w"), ReadableFile[])
 
 include("deprecated.jl")
 include("iojunk.jl")
@@ -114,7 +114,7 @@ function msdostime(secs)
 end
 
 # Convert MS-DOS time/date to seconds since epoch
-function mtime(f::File)
+function mtime(f::ReadableFile)
 	sec = 2*(f.dostime & 0x1f)
 	min = (f.dostime>>5) & 0x3f
 	hour = f.dostime>>11
@@ -168,7 +168,7 @@ end
 
 function getfiles(io::IO, diroffset::Integer, nfiles::Integer)
 	seek(io, diroffset)
-	files = Array(File, nfiles)
+	files = Array(ReadableFile, nfiles)
 	for i in 1:nfiles
 		if readle(io, Uint32) != CentralDirSig
 			error("invalid file header")
@@ -194,7 +194,7 @@ function getfiles(io::IO, diroffset::Integer, nfiles::Integer)
 		offset = readle(io, Uint32)
 		name = utf8(read(io, Uint8, namelen))
 		skip(io, extralen+commentlen)
-		files[i] = File(io, name, method, dostime, dosdate,
+		files[i] = ReadableFile(io, name, method, dostime, dosdate,
 			crc32, compsize, uncompsize, offset)
 	end
 	files
@@ -272,7 +272,7 @@ function close(wf::WritableFile)
 	seekend(wf.f.io)
 end
 
-function read{T}(f::File, a::Array{T})
+function read{T}(f::ReadableFile, a::Array{T})
 	if !isbits(T)
 		return invoke(read, (IO, Array), s, a)
 	end
@@ -316,7 +316,7 @@ function read{T}(f::File, a::Array{T})
 	a
 end
 
-function eof(f::File)
+function eof(f::ReadableFile)
 	f._pos >= f.uncompressedsize
 end
 
@@ -330,7 +330,7 @@ function addfile(w::Writer, name::String; method::Integer=Store, mtime::Float64=
 		mtime = time()
 	end
 	dostime, dosdate = msdostime(mtime)
-	f = File(w.io, name, uint16(method), dostime, dosdate,
+	f = ReadableFile(w.io, name, uint16(method), dostime, dosdate,
 		uint32(0), uint32(0), uint32(0), uint32(position(w.io)))
 	
 	# Write local file header. Missing entries will be filled in later.

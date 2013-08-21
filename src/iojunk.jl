@@ -30,7 +30,7 @@ end
 
 # This function needs to be fast because readbytes, readall, etc.
 # uses it. Avoid function calls when possible.
-function read(f::File, ::Type{Uint8})
+function read(f::ReadableFile, ::Type{Uint8})
 	b = Array(Uint8, 1)
 	read(f, b)
 	b[1]
