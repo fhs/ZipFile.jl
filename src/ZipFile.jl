@@ -28,10 +28,10 @@ type ReadableFile <: IO
 	uncompressedsize :: Uint32
 	offset :: Uint32
 	_currentcrc32 :: Uint32
-	_pos :: Int64		# uncompressed position
-	_zpos :: Int64		# compressed position
-	_datapos :: Int64	# position where data begins
-	_dataio :: IO
+	_pos :: Int64       # current position in uncompressed data
+	_zpos :: Int64      # current position in compressed data
+	_datapos :: Int64   # position where data begins
+	_zio :: IO          # compression IO
 	
 	function ReadableFile(io::IO, name::String, method::Uint16, dostime::Uint16,
 			dosdate::Uint16, crc32::Uint32, compressedsize::Uint32,
@@ -62,10 +62,10 @@ function Reader(filename::String)
 end
 
 type WritableFile <: IO
-	io :: IO		# wrapper IO for Deflate, etc.
+	_zio :: IO          # compression IO
 	f :: ReadableFile
 	closed :: Bool
-	_datapos :: Int64	# position where data begins
+	_datapos :: Int64   # position where data begins
 	
 	WritableFile(io::IO, f::ReadableFile, closed::Bool, _datapos::Int64) =
 		(x = new(io, f, closed, _datapos); finalizer(x, close); x)
@@ -260,7 +260,7 @@ function close(wf::WritableFile)
 	wf.closed = true
 	
 	if wf.f.method == Deflate
-		close(wf.io)
+		close(wf._zio)
 	end
 	wf.f.compressedsize = position(wf)
 	
@@ -287,9 +287,9 @@ function read{T}(f::ReadableFile, a::Array{T})
 		extralen = readle(f.io, Uint16)
 		skip(f.io, filelen+extralen)
 		if f.method == Deflate
-			f._dataio = Zlib.Reader(f.io, true)
+			f._zio = Zlib.Reader(f.io, true)
 		elseif f.method == Store
-			f._dataio = f.io
+			f._zio = f.io
 		end
 		f._datapos = position(f.io)
 	end
@@ -300,14 +300,14 @@ function read{T}(f::ReadableFile, a::Array{T})
 	
 	seek(f.io, f._datapos+f._zpos)
 	b = reinterpret(Uint8, reshape(a, length(a)))
-	read(f._dataio, b)
+	read(f._zio, b)
 	f._zpos = position(f.io) - f._datapos
 	f._pos += length(b)
 	f._currentcrc32 = Zlib.crc32(b, f._currentcrc32)
 	
 	if eof(f)
 		if f.method == Deflate
-			close(f._dataio)
+			close(f._zio)
 		end
 		if  f._currentcrc32 != f.crc32
 			error("crc32 do not match")
@@ -362,7 +362,7 @@ function position(wf::WritableFile)
 end
 
 function write(wf::WritableFile, p::Ptr, nb::Integer)
-	n = write(wf.io, p, nb)
+	n = write(wf._zio, p, nb)
 	if n != nb
 		error("short write")
 	end
