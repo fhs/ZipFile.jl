@@ -139,12 +139,12 @@ end
 type Writer
 	io :: IO
 	files :: Vector{WritableFile}
-	current :: Union(WritableFile, Nothing)
+	_current :: Union(WritableFile, Nothing)
 	_closed :: Bool
 	
 	Writer(io::IO, files::Vector{WritableFile},
-		current::Union(WritableFile, Nothing), _closed::Bool) =
-		(x = new(io, files, current, _closed); finalizer(x, close); x)
+		_current::Union(WritableFile, Nothing), _closed::Bool) =
+		(x = new(io, files, _current, _closed); finalizer(x, close); x)
 end
 
 # Create a new ZIP file that will be written to io.
@@ -307,9 +307,9 @@ function close(w::Writer)
 	end
 	w._closed = true
 	
-	if !is(w.current, nothing)
-		close(w.current)
-		w.current = nothing
+	if !is(w._current, nothing)
+		close(w._current)
+		w._current = nothing
 	end
 
 	cdpos = position(w.io)
@@ -433,9 +433,9 @@ end
 # Method names the compression method that will be used, and mtime is the
 # modification time of the file.
 function addfile(w::Writer, name::String; method::Integer=Store, mtime::Float64=-1.0)
-	if !is(w.current, nothing)
-		close(w.current)
-		w.current = nothing
+	if !is(w._current, nothing)
+		close(w._current)
+		w._current = nothing
 	end
 	
 	if mtime < 0
@@ -466,8 +466,8 @@ function addfile(w::Writer, name::String; method::Integer=Store, mtime::Float64=
 		f._zio = Zlib.Writer(f.io, false, true)
 	end
 	w.files = [w.files, f]
-	w.current = f
-	w.current
+	w._current = f
+	w._current
 end
 
 # Returns the current position in file f.

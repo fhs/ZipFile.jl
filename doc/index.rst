@@ -114,7 +114,6 @@ Type Writer
 	type Writer
 		io :: IO
 		files :: Vector{WritableFile}
-		current :: Union(WritableFile, Nothing)
 	end
 
 .. function::  Writer(io::IO)
