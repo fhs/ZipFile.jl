@@ -59,14 +59,14 @@ const _Method2Str = [Store => "Store", Deflate => "Deflate"]
 
 type ReadableFile <: IO
 	io :: IO
-	name :: String
-	method :: Uint16
-	dostime :: Uint16
-	dosdate :: Uint16
-	crc32 :: Uint32
-	compressedsize :: Uint32
-	uncompressedsize :: Uint32
-	offset :: Uint32
+	name :: String              # filename
+	method :: Uint16            # compression method
+	dostime :: Uint16           # modification time in MS-DOS format
+	dosdate :: Uint16           # modification date in MS-DOS format
+	crc32 :: Uint32             # CRC32 of uncompressed data
+	compressedsize :: Uint32    # file size after compression
+	uncompressedsize :: Uint32  # size of uncompressed file
+	_offset :: Uint32
 	_datapos :: Int64   # position where data begins
 	_zio :: IO          # compression IO
 
@@ -76,12 +76,12 @@ type ReadableFile <: IO
 	
 	function ReadableFile(io::IO, name::String, method::Uint16, dostime::Uint16,
 			dosdate::Uint16, crc32::Uint32, compressedsize::Uint32,
-			uncompressedsize::Uint32, offset::Uint32)
+			uncompressedsize::Uint32, _offset::Uint32)
 		if method != Store && method != Deflate
 			error("unknown compression method $method")
 		end
 		new(io, name, method, dostime, dosdate, crc32,
-			compressedsize, uncompressedsize, offset, -1, io, 0, 0, 0)
+			compressedsize, uncompressedsize, _offset, -1, io, 0, 0, 0)
 	end
 end
 
@@ -109,28 +109,28 @@ end
 
 type WritableFile <: IO
 	io :: IO
-	name :: String
-	method :: Uint16
-	dostime :: Uint16
-	dosdate :: Uint16
-	crc32 :: Uint32
-	compressedsize :: Uint32
-	uncompressedsize :: Uint32
-	offset :: Uint32
+	name :: String              # filename
+	method :: Uint16            # compression method
+	dostime :: Uint16           # modification time in MS-DOS format
+	dosdate :: Uint16           # modification date in MS-DOS format
+	crc32 :: Uint32             # CRC32 of uncompressed data
+	compressedsize :: Uint32    # file size after compression
+	uncompressedsize :: Uint32  # size of uncompressed file
+	_offset :: Uint32
 	_datapos :: Int64   # position where data begins
 	_zio :: IO          # compression IO
 	
-	closed :: Bool
+	_closed :: Bool
 	
 	function WritableFile(io::IO, name::String, method::Uint16, dostime::Uint16,
 			dosdate::Uint16, crc32::Uint32, compressedsize::Uint32,
-			uncompressedsize::Uint32, offset::Uint32, _datapos::Int64,
-			_zio::IO, closed::Bool)
+			uncompressedsize::Uint32, _offset::Uint32, _datapos::Int64,
+			_zio::IO, _closed::Bool)
 		if method != Store && method != Deflate
 			error("unknown compression method $method")
 		end
 		f = new(io, name, method, dostime, dosdate, crc32,
-			compressedsize, uncompressedsize, offset, _datapos, _zio, closed)
+			compressedsize, uncompressedsize, _offset, _datapos, _zio, _closed)
 		finalizer(f, close)
 		f
 	end
@@ -140,11 +140,11 @@ type Writer
 	io :: IO
 	files :: Vector{WritableFile}
 	current :: Union(WritableFile, Nothing)
-	closed :: Bool
+	_closed :: Bool
 	
 	Writer(io::IO, files::Vector{WritableFile},
-		current::Union(WritableFile, Nothing), closed::Bool) =
-		(x = new(io, files, current, closed); finalizer(x, close); x)
+		current::Union(WritableFile, Nothing), _closed::Bool) =
+		(x = new(io, files, current, _closed); finalizer(x, close); x)
 end
 
 # Create a new ZIP file that will be written to io.
@@ -214,7 +214,7 @@ function _mtime(dostime::Uint16, dosdate::Uint16)
 	time(TmStruct(sec, min, hour, mday, month, year, 0, 0, -1))
 end
 
-# Returns the modification time of f.
+# Returns the modification time of f as seconds since epoch.
 function mtime(f::Union(ReadableFile, WritableFile))
 	_mtime(f.dostime, f.dosdate)
 end
@@ -302,10 +302,10 @@ end
 
 # Flush output and close the underlying IO instance.
 function close(w::Writer)
-	if w.closed
+	if w._closed
 		return
 	end
-	w.closed = true
+	w._closed = true
 	
 	if !is(w.current, nothing)
 		close(w.current)
@@ -334,7 +334,7 @@ function close(w::Writer)
 		_writele(w.io, uint16(0))
 		_writele(w.io, uint16(0))
 		_writele(w.io, uint32(0))
-		_writele(w.io, uint32(f.offset))
+		_writele(w.io, uint32(f._offset))
 		_writele(w.io, b)
 		cdsize += 46+length(b)
 	end
@@ -354,10 +354,10 @@ end
 
 # Flush the file f into the ZIP file.
 function close(f::WritableFile)
-	if f.closed
+	if f._closed
 		return
 	end
-	f.closed = true
+	f._closed = true
 	
 	if f.method == Deflate
 		close(f._zio)
@@ -365,7 +365,7 @@ function close(f::WritableFile)
 	f.compressedsize = position(f)
 	
 	# fill in local file header fillers
-	seek(f.io, f.offset+14)	# seek to CRC-32
+	seek(f.io, f._offset+14)	# seek to CRC-32
 	_writele(f.io, uint32(f.crc32))
 	_writele(f.io, uint32(f.compressedsize))
 	_writele(f.io, uint32(f.uncompressedsize))
@@ -384,7 +384,7 @@ function read{T}(f::ReadableFile, a::Array{T})
 	end
 	
 	if f._datapos < 0
-		seek(f.io, f.offset)
+		seek(f.io, f._offset)
 		if readle(f.io, Uint32) != _LocalFileHdrSig
 			error("invalid file header")
 		end

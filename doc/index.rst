@@ -65,14 +65,13 @@ Type ReadableFile
 
 	type ReadableFile <: IO
 		io :: IO
-		name :: String
-		method :: Uint16
-		dostime :: Uint16
-		dosdate :: Uint16
-		crc32 :: Uint32
-		compressedsize :: Uint32
-		uncompressedsize :: Uint32
-		offset :: Uint32
+		name :: String              # filename
+		method :: Uint16            # compression method
+		dostime :: Uint16           # modification time in MS-DOS format
+		dosdate :: Uint16           # modification date in MS-DOS format
+		crc32 :: Uint32             # CRC32 of uncompressed data
+		compressedsize :: Uint32    # file size after compression
+		uncompressedsize :: Uint32  # size of uncompressed file
 	end
 
 Type Reader
@@ -99,15 +98,13 @@ Type WritableFile
 
 	type WritableFile <: IO
 		io :: IO
-		name :: String
-		method :: Uint16
-		dostime :: Uint16
-		dosdate :: Uint16
-		crc32 :: Uint32
-		compressedsize :: Uint32
-		uncompressedsize :: Uint32
-		offset :: Uint32
-		closed :: Bool
+		name :: String              # filename
+		method :: Uint16            # compression method
+		dostime :: Uint16           # modification time in MS-DOS format
+		dosdate :: Uint16           # modification date in MS-DOS format
+		crc32 :: Uint32             # CRC32 of uncompressed data
+		compressedsize :: Uint32    # file size after compression
+		uncompressedsize :: Uint32  # size of uncompressed file
 	end
 
 Type Writer
@@ -118,7 +115,6 @@ Type Writer
 		io :: IO
 		files :: Vector{WritableFile}
 		current :: Union(WritableFile, Nothing)
-		closed :: Bool
 	end
 
 .. function::  Writer(io::IO)
@@ -143,7 +139,7 @@ Function mtime
 --------------
 .. function::  mtime(f::Union(ReadableFile, WritableFile))
 
-Returns the modification time of f.
+Returns the modification time of f as seconds since epoch.
 
 Function close
 --------------
