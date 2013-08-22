@@ -3,7 +3,10 @@
    Edit the original Julia source code with the documentation.
 
 ZipFile --- A Julia package for reading/writing ZIP archive files
------------------------------------------------------------------
+=================================================================
+
+.. module::  ZipFile
+	:synopsis:  A Julia package for reading/writing ZIP archive files
 
 This package provides support for reading and writing ZIP archives in Julia.
 Install it via the Julia package manager using ``Pkg.add("ZipFile")``.

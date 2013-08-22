@@ -24,7 +24,7 @@ def constname(line):
 
 def printtitle(title, c='-'):
     print(title)
-    print("-"*len(title))
+    print(c*len(title))
 
 def printfunc(funcdocs):
     for sig, doc in funcdocs:
@@ -36,6 +36,18 @@ def printcode(lines):
     for line in lines:
         print("\t%s" % line, end='')
     print("")
+
+def printmodule(name, comments):
+    synopsis = ''
+    if len(comments) > 0:
+        synopsis = comments[0].strip()
+        comments = comments[1:]
+    printtitle(name+' --- '+synopsis, '=')
+    print('')
+    print('.. module:: ', name)
+    if synopsis != '':
+        print('\t:synopsis: ', synopsis)
+    print(''.join(comments))
 
 def main():
     print(".. This file was auto-generated using jldoc.py.")
@@ -68,12 +80,7 @@ def main():
                 constants.append(line)
             comments = []
         elif line.startswith('module'):
-            title = modulename(line)
-            if len(comments) > 0:
-                title = title + ' --- ' + comments[0].strip()
-                comments = comments[1:]
-            printtitle(title, '=')
-            print(''.join(comments))
+            printmodule(modulename(line), comments)
             comments = []
         elif line.startswith('export'):
             printtitle("Exports")
