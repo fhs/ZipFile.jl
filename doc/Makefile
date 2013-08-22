@@ -152,5 +152,8 @@ doctest:
 	@echo "Testing of doctests in the sources finished, look at the " \
 	      "results in $(BUILDDIR)/doctest/output.txt."
 
-index.rst: jldoc.py
-	cat ../src/ZipFile.jl ../src/iojunk.jl | python jldoc.py > index.rst
+
+JLSOURCE = ../src/ZipFile.jl ../src/iojunk.jl 
+
+index.rst: jldoc.py $(JLSOURCE)
+	cat $(JLSOURCE) | python jldoc.py > index.rst

@@ -13,21 +13,21 @@
 # 
 # 	using ZipFile
 # 	
-# 	dir = ZipFile.Writer("example.zip");
-# 	f = ZipFile.addfile(dir, "hello.txt");
+# 	w = ZipFile.Writer("example.zip");
+# 	f = ZipFile.addfile(w, "hello.txt");
 # 	write(f, "hello world!\n");
-# 	f = ZipFile.addfile(dir, "julia.txt", method=ZipFile.Deflate);
+# 	f = ZipFile.addfile(w, "julia.txt", method=ZipFile.Deflate);
 # 	write(f, "Julia\n"^5);
-# 	close(dir)
+# 	close(w)
 # 
 # Read and print out the contents of a ZIP file::
 # 
-# 	dir = ZipFile.Reader("example.zip");
-# 	for f in dir.files
+# 	r = ZipFile.Reader("example.zip");
+# 	for f in r.files
 # 		println("Filename: $(f.name)")
 # 		write(readall(f));
 # 	end
-# 	close(dir)
+# 	close(r)
 #
 # Output::
 # 
@@ -296,8 +296,8 @@ function _getfiles(io::IO, diroffset::Integer, nfiles::Integer)
 end
 
 # Close the underlying IO instance.
-function close(dir::Reader)
-	close(dir._io)
+function close(r::Reader)
+	close(r._io)
 end
 
 # Flush output and close the underlying IO instance.
