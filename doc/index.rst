@@ -64,7 +64,6 @@ Type ReadableFile
 .. code-block:: julia
 
 	type ReadableFile <: IO
-		io :: IO
 		name :: String              # filename
 		method :: Uint16            # compression method
 		dostime :: Uint16           # modification time in MS-DOS format
@@ -79,7 +78,6 @@ Type Reader
 .. code-block:: julia
 
 	type Reader
-		io :: IO
 		files :: Vector{ReadableFile} # ZIP file entries that be read concurrently
 		comment :: String             # ZIP file comment
 	end
@@ -97,7 +95,6 @@ Type WritableFile
 .. code-block:: julia
 
 	type WritableFile <: IO
-		io :: IO
 		name :: String              # filename
 		method :: Uint16            # compression method
 		dostime :: Uint16           # modification time in MS-DOS format
@@ -112,8 +109,7 @@ Type Writer
 .. code-block:: julia
 
 	type Writer
-		io :: IO
-		files :: Vector{WritableFile}
+		files :: Vector{WritableFile} # files (being) written
 	end
 
 .. function::  Writer(io::IO)
@@ -181,7 +177,7 @@ Function addfile
 Add a new file named name into the ZIP file writer w, and return the
 WritableFile for the new file. We don't allow concurrrent writes,
 thus the file previously added using this function will be closed.
-Method names the compression method that will be used, and mtime is the
+Method specifies the compression method that will be used, and mtime is the
 modification time of the file.
 
 Function position

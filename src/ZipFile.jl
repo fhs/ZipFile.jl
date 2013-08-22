@@ -58,7 +58,7 @@ const Deflate = 8	# Deflate compression method
 const _Method2Str = [Store => "Store", Deflate => "Deflate"]
 
 type ReadableFile <: IO
-	io :: IO
+	_io :: IO
 	name :: String              # filename
 	method :: Uint16            # compression method
 	dostime :: Uint16           # modification time in MS-DOS format
@@ -86,7 +86,7 @@ type ReadableFile <: IO
 end
 
 type Reader
-	io :: IO
+	_io :: IO
 	files :: Vector{ReadableFile} # ZIP file entries that be read concurrently
 	comment :: String             # ZIP file comment
 	
@@ -108,7 +108,7 @@ function Reader(filename::String)
 end
 
 type WritableFile <: IO
-	io :: IO
+	_io :: IO
 	name :: String              # filename
 	method :: Uint16            # compression method
 	dostime :: Uint16           # modification time in MS-DOS format
@@ -137,8 +137,8 @@ type WritableFile <: IO
 end
 
 type Writer
-	io :: IO
-	files :: Vector{WritableFile}
+	_io :: IO
+	files :: Vector{WritableFile} # files (being) written
 	_current :: Union(WritableFile, Nothing)
 	_closed :: Bool
 	
@@ -164,7 +164,7 @@ end
 
 # Print out a summary of rw in a human-readable format.
 function show(io::IO, rw::Union(Reader, Writer))
-	println("$(string(typeof(rw))) for $(rw.io) containing $(length(rw.files)) files:\n")
+	println("$(string(typeof(rw))) for $(rw._io) containing $(length(rw.files)) files:\n")
 	@printf("%16s %-7s %-16s %s\n", "uncompressedsize", "method", "mtime", "name")
 	println("-"^(16+1+7+1+16+1+4))
 	for f in rw.files
@@ -297,7 +297,7 @@ end
 
 # Close the underlying IO instance.
 function close(dir::Reader)
-	close(dir.io)
+	close(dir._io)
 end
 
 # Flush output and close the underlying IO instance.
@@ -312,44 +312,44 @@ function close(w::Writer)
 		w._current = nothing
 	end
 
-	cdpos = position(w.io)
+	cdpos = position(w._io)
 	cdsize = 0
 	
 	# write central directory record
 	for f in w.files
-		_writele(w.io, uint32(_CentralDirSig))
-		_writele(w.io, uint16(_ZipVersion))
-		_writele(w.io, uint16(_ZipVersion))
-		_writele(w.io, uint16(0))
-		_writele(w.io, uint16(f.method))
-		_writele(w.io, uint16(f.dostime))
-		_writele(w.io, uint16(f.dosdate))
-		_writele(w.io, uint32(f.crc32))
-		_writele(w.io, uint32(f.compressedsize))
-		_writele(w.io, uint32(f.uncompressedsize))
+		_writele(w._io, uint32(_CentralDirSig))
+		_writele(w._io, uint16(_ZipVersion))
+		_writele(w._io, uint16(_ZipVersion))
+		_writele(w._io, uint16(0))
+		_writele(w._io, uint16(f.method))
+		_writele(w._io, uint16(f.dostime))
+		_writele(w._io, uint16(f.dosdate))
+		_writele(w._io, uint32(f.crc32))
+		_writele(w._io, uint32(f.compressedsize))
+		_writele(w._io, uint32(f.uncompressedsize))
 		b = convert(Vector{Uint8}, f.name)
-		_writele(w.io, uint16(length(b)))
-		_writele(w.io, uint16(0))
-		_writele(w.io, uint16(0))
-		_writele(w.io, uint16(0))
-		_writele(w.io, uint16(0))
-		_writele(w.io, uint32(0))
-		_writele(w.io, uint32(f._offset))
-		_writele(w.io, b)
+		_writele(w._io, uint16(length(b)))
+		_writele(w._io, uint16(0))
+		_writele(w._io, uint16(0))
+		_writele(w._io, uint16(0))
+		_writele(w._io, uint16(0))
+		_writele(w._io, uint32(0))
+		_writele(w._io, uint32(f._offset))
+		_writele(w._io, b)
 		cdsize += 46+length(b)
 	end
 	
 	# write end of central directory
-	_writele(w.io, uint32(_EndCentralDirSig))
-	_writele(w.io, uint16(0))
-	_writele(w.io, uint16(0))
-	_writele(w.io, uint16(length(w.files)))
-	_writele(w.io, uint16(length(w.files)))
-	_writele(w.io, uint32(cdsize))
-	_writele(w.io, uint32(cdpos))
-	_writele(w.io, uint16(0))
+	_writele(w._io, uint32(_EndCentralDirSig))
+	_writele(w._io, uint16(0))
+	_writele(w._io, uint16(0))
+	_writele(w._io, uint16(length(w.files)))
+	_writele(w._io, uint16(length(w.files)))
+	_writele(w._io, uint32(cdsize))
+	_writele(w._io, uint32(cdpos))
+	_writele(w._io, uint16(0))
 	
-	close(w.io)
+	close(w._io)
 end
 
 # Flush the file f into the ZIP file.
@@ -365,11 +365,11 @@ function close(f::WritableFile)
 	f.compressedsize = position(f)
 	
 	# fill in local file header fillers
-	seek(f.io, f._offset+14)	# seek to CRC-32
-	_writele(f.io, uint32(f.crc32))
-	_writele(f.io, uint32(f.compressedsize))
-	_writele(f.io, uint32(f.uncompressedsize))
-	seekend(f.io)
+	seek(f._io, f._offset+14)	# seek to CRC-32
+	_writele(f._io, uint32(f.crc32))
+	_writele(f._io, uint32(f.compressedsize))
+	_writele(f._io, uint32(f.uncompressedsize))
+	seekend(f._io)
 end
 
 # A no-op provided for completeness.
@@ -384,30 +384,30 @@ function read{T}(f::ReadableFile, a::Array{T})
 	end
 	
 	if f._datapos < 0
-		seek(f.io, f._offset)
-		if readle(f.io, Uint32) != _LocalFileHdrSig
+		seek(f._io, f._offset)
+		if readle(f._io, Uint32) != _LocalFileHdrSig
 			error("invalid file header")
 		end
-		skip(f.io, 2+2+2+2+2+4+4+4)
-		filelen = readle(f.io, Uint16)
-		extralen = readle(f.io, Uint16)
-		skip(f.io, filelen+extralen)
+		skip(f._io, 2+2+2+2+2+4+4+4)
+		filelen = readle(f._io, Uint16)
+		extralen = readle(f._io, Uint16)
+		skip(f._io, filelen+extralen)
 		if f.method == Deflate
-			f._zio = Zlib.Reader(f.io, true)
+			f._zio = Zlib.Reader(f._io, true)
 		elseif f.method == Store
-			f._zio = f.io
+			f._zio = f._io
 		end
-		f._datapos = position(f.io)
+		f._datapos = position(f._io)
 	end
 	
 	if eof(f) || f._pos+length(a)*sizeof(T) > f.uncompressedsize
 		throw(EOFError())
 	end
 	
-	seek(f.io, f._datapos+f._zpos)
+	seek(f._io, f._datapos+f._zpos)
 	b = reinterpret(Uint8, reshape(a, length(a)))
 	read(f._zio, b)
-	f._zpos = position(f.io) - f._datapos
+	f._zpos = position(f._io) - f._datapos
 	f._pos += length(b)
 	f._currentcrc32 = Zlib.crc32(b, f._currentcrc32)
 	
@@ -430,7 +430,7 @@ end
 # Add a new file named name into the ZIP file writer w, and return the
 # WritableFile for the new file. We don't allow concurrrent writes,
 # thus the file previously added using this function will be closed.
-# Method names the compression method that will be used, and mtime is the
+# Method specifies the compression method that will be used, and mtime is the
 # modification time of the file.
 function addfile(w::Writer, name::String; method::Integer=Store, mtime::Float64=-1.0)
 	if !is(w._current, nothing)
@@ -442,28 +442,28 @@ function addfile(w::Writer, name::String; method::Integer=Store, mtime::Float64=
 		mtime = time()
 	end
 	dostime, dosdate = _msdostime(mtime)
-	f = WritableFile(w.io, name, uint16(method), dostime, dosdate,
-		uint32(0), uint32(0), uint32(0), uint32(position(w.io)),
-		int64(-1), w.io, false)
+	f = WritableFile(w._io, name, uint16(method), dostime, dosdate,
+		uint32(0), uint32(0), uint32(0), uint32(position(w._io)),
+		int64(-1), w._io, false)
 	
 	# Write local file header. Missing entries will be filled in later.
-	_writele(w.io, uint32(_LocalFileHdrSig))
-	_writele(w.io, uint16(_ZipVersion))
-	_writele(w.io, uint16(0))
-	_writele(w.io, uint16(f.method))
-	_writele(w.io, uint16(f.dostime))
-	_writele(w.io, uint16(f.dosdate))
-	_writele(w.io, uint32(f.crc32))	# filler
-	_writele(w.io, uint32(f.compressedsize))	# filler
-	_writele(w.io, uint32(f.uncompressedsize))	# filler
+	_writele(w._io, uint32(_LocalFileHdrSig))
+	_writele(w._io, uint16(_ZipVersion))
+	_writele(w._io, uint16(0))
+	_writele(w._io, uint16(f.method))
+	_writele(w._io, uint16(f.dostime))
+	_writele(w._io, uint16(f.dosdate))
+	_writele(w._io, uint32(f.crc32))	# filler
+	_writele(w._io, uint32(f.compressedsize))	# filler
+	_writele(w._io, uint32(f.uncompressedsize))	# filler
 	b = convert(Vector{Uint8}, f.name)
-	_writele(w.io, uint16(length(b)))
-	_writele(w.io, uint16(0))
-	_writele(w.io, b)
+	_writele(w._io, uint16(length(b)))
+	_writele(w._io, uint16(0))
+	_writele(w._io, b)
 
-	f._datapos = position(w.io)
+	f._datapos = position(w._io)
 	if f.method == Deflate
-		f._zio = Zlib.Writer(f.io, false, true)
+		f._zio = Zlib.Writer(f._io, false, true)
 	end
 	w.files = [w.files, f]
 	w._current = f
@@ -472,7 +472,7 @@ end
 
 # Returns the current position in file f.
 function position(f::WritableFile)
-	position(f.io) - f._datapos
+	position(f._io) - f._datapos
 end
 
 # Returns the current position in file f.
