@@ -1,6 +1,7 @@
-# If this is not provided, Base.IO write methods will write
-# arrays one element at a time.
+# Writer the content of a into w.
 function write{T}(w::WritableFile, a::Array{T})
+	# If this is not provided, Base.IO write methods will write
+	# arrays one element at a time.
 	if isbits(T)
 		write(w, pointer(a), length(a)*sizeof(T))
 	else
@@ -8,8 +9,9 @@ function write{T}(w::WritableFile, a::Array{T})
 	end
 end
 
-# Copied from Julia base/io.jl
+# Writer the content of a into w.
 function write{T,N,A<:Array}(w::WritableFile, a::SubArray{T,N,A})
+	# This function is copied from Julia base/io.jl
 	if !isbits(T) || stride(a,1)!=1
 		return invoke(write, (Any, AbstractArray), s, a)
 	end
@@ -23,14 +25,15 @@ function write{T,N,A<:Array}(w::WritableFile, a::SubArray{T,N,A})
 	end
 end
 
+# Writer the byte b in w.
 function write(w::WritableFile, b::Uint8)
 	write(w, Uint8[b])
 end
 
-
-# This function needs to be fast because readbytes, readall, etc.
-# uses it. Avoid function calls when possible.
+# Read a byte from f. Throws EOFError if there is no more byte to read.
 function read(f::ReadableFile, ::Type{Uint8})
+	# This function needs to be fast because readbytes, readall, etc.
+	# uses it. Avoid function calls when possible.
 	b = Array(Uint8, 1)
 	read(f, b)
 	b[1]
