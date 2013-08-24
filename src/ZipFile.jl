@@ -87,7 +87,7 @@ end
 
 type Reader
 	_io :: IO
-	files :: Vector{ReadableFile} # ZIP file entries that be read concurrently
+	files :: Vector{ReadableFile} # ZIP file entries that can be read concurrently
 	comment :: String             # ZIP file comment
 	
 	Reader(io::IO, files::Vector{ReadableFile}, comment::String) =
@@ -422,7 +422,7 @@ function read{T}(f::ReadableFile, a::Array{T})
 	a
 end
 
-# Reaturn true if and only if we have reached the end of file f.
+# Returns true if and only if we have reached the end of file f.
 function eof(f::ReadableFile)
 	f._pos >= f.uncompressedsize
 end
@@ -480,7 +480,7 @@ function position(f::ReadableFile)
 	f._pos
 end
 
-# Write nb elements located a p into f.
+# Write nb elements located at p into f.
 function write(f::WritableFile, p::Ptr, nb::Integer)
 	n = write(f._zio, p, nb)
 	if n != nb

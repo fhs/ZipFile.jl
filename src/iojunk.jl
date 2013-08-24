@@ -30,7 +30,7 @@ function write(w::WritableFile, b::Uint8)
 	write(w, Uint8[b])
 end
 
-# Read a byte from f. Throws EOFError if there is no more byte to read.
+# Read and return a byte from f. Throws EOFError if there is no more byte to read.
 function read(f::ReadableFile, ::Type{Uint8})
 	# This function needs to be fast because readbytes, readall, etc.
 	# uses it. Avoid function calls when possible.

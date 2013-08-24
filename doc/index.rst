@@ -81,7 +81,7 @@ Type Reader
 .. code-block:: julia
 
 	type Reader
-		files :: Vector{ReadableFile} # ZIP file entries that be read concurrently
+		files :: Vector{ReadableFile} # ZIP file entries that can be read concurrently
 		comment :: String             # ZIP file comment
 	end
 
@@ -165,13 +165,13 @@ Read data into a. Throws EOFError if a cannot be filled in completely.
 
 .. function::  read(f::ReadableFile, ::Type{Uint8})
 
-Read a byte from f. Throws EOFError if there is no more byte to read.
+Read and return a byte from f. Throws EOFError if there is no more byte to read.
 
 Function eof
 ------------
 .. function::  eof(f::ReadableFile)
 
-Reaturn true if and only if we have reached the end of file f.
+Returns true if and only if we have reached the end of file f.
 
 Function addfile
 ----------------
@@ -197,7 +197,7 @@ Function write
 --------------
 .. function::  write(f::WritableFile, p::Ptr, nb::Integer)
 
-Write nb elements located a p into f.
+Write nb elements located at p into f.
 
 .. function::  write{T}(w::WritableFile, a::Array{T})
 
