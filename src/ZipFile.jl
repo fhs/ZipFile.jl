@@ -47,6 +47,10 @@ import Zlib
 
 export read, eof, write, close, mtime, position, show
 
+if !isdefined(:read!)
+    read! = read
+end
+
 # TODO: ZIP64 support, data descriptor support
 
 const _LocalFileHdrSig   = 0x04034b50
@@ -406,7 +410,7 @@ function read{T}(f::ReadableFile, a::Array{T})
 	
 	seek(f._io, f._datapos+f._zpos)
 	b = reinterpret(Uint8, reshape(a, length(a)))
-	read(f._zio, b)
+	read!(f._zio, b)
 	f._zpos = position(f._io) - f._datapos
 	f._pos += length(b)
 	f._currentcrc32 = Zlib.crc32(b, f._currentcrc32)

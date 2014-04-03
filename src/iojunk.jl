@@ -20,7 +20,7 @@ function write{T,N,A<:Array}(w::WritableFile, a::SubArray{T,N,A})
 		return write(w, pointer(a, 1), colsz)
 	else
 		cartesianmap((idxs...)->write(w, pointer(a, idxs), colsz),
-			tuple(1, size(a)[2:]...))
+			tuple(1, size(a)[2:end]...))
 		return colsz*Base.trailingsize(a,2)
 	end
 end
