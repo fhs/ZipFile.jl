@@ -1,6 +1,12 @@
 #!/usr/bin/env python
-# This program extracts comments and code from julia
-# source code from standard input and outputs a sphinx rst file.
+"""
+This program extracts documentation from julia
+source code from the standard input and outputs a sphinx rst file.
+The source code needs to be follow certain coding convention
+since it doesn't know how to fully parse julia.
+
+usage: jldoc.py < file1.jl file2.jl ...  > doc.rst
+"""
 
 import sys
 from collections import defaultdict
