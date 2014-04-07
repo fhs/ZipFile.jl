@@ -61,15 +61,19 @@ zipdata = [
 modtime = time(TmStruct(24, 42, 9, 16, 7, 2013-1900, 0, 0, -1))
 
 dir = ZipFile.Writer("$tmp/hello.zip")
+@test length(string(dir)) > 0
 for (name, data, meth) in zipdata
 	f = ZipFile.addfile(dir, name; method=meth, mtime=modtime)
+	@test length(string(f)) > 0
 	write(f, data)
 end
 close(dir)
 
 dir = ZipFile.Reader("$tmp/hello.zip")
+@test length(string(dir)) > 0
 for (name, data, meth) in zipdata
 	f = findfile(dir, name)
+	@test length(string(f)) > 0
 	@test f.method == meth
 	@test abs(mtime(f) - modtime) < 2
 	@test fileequals(f, data)
