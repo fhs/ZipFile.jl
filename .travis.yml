@@ -11,7 +11,6 @@ before_install:
     - git config --global user.name "Travis User"
     - git config --global user.email "travis@example.net"
 script:
-    - julia -e 'Pkg.init(); Pkg.add("Zlib", v"0.1.2")'
-    - mkdir -p ~/.julia/ZipFile
-    - cp -R ./* ~/.julia/ZipFile/
-    - julia ~/.julia/ZipFile/test/test.jl
+    - julia -e 'Pkg.init(); Pkg.add("Zlib", v"0.1.2"); run(`ln -s $(pwd()) $(Pkg.dir("ZipFile"))`); Pkg.pin("ZipFile"); Pkg.resolve()'
+    - julia -e 'using ZipFile; @assert isdefined(:ZipFile); @assert typeof(ZipFile) === Module'
+    - julia test/tests.jl
