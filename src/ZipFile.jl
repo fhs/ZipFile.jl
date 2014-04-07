@@ -57,9 +57,9 @@ const _LocalFileHdrSig   = 0x04034b50
 const _CentralDirSig     = 0x02014b50
 const _EndCentralDirSig  = 0x06054b50
 const _ZipVersion = 20
-const Store = 0		# Compression method that does no compression
-const Deflate = 8	# Deflate compression method
-const _Method2Str = [Store => "Store", Deflate => "Deflate"]
+const Store = uint16(0)   # Compression method that does no compression
+const Deflate = uint16(8) # Deflate compression method
+const _Method2Str = (Uint16 => String)[Store => "Store", Deflate => "Deflate"]
 
 type ReadableFile <: IO
 	_io :: IO
