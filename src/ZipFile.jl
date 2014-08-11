@@ -277,9 +277,6 @@ function _getfiles(io::IO, diroffset::Integer, nfiles::Integer)
 		if (flag & (1<<0)) != 0
 			error("encryption not supported")
 		end
-		if (flag & (1<<3)) != 0
-			error("data descriptor not supported")
-		end
 		method = readle(io, Uint16)
 		dostime = readle(io, Uint16)
 		dosdate = readle(io, Uint16)
