@@ -44,6 +44,7 @@ module ZipFile
 
 import Base: read, eof, write, close, mtime, position, show
 import Zlib
+using Compat
 
 export read, eof, write, close, mtime, position, show
 
@@ -59,7 +60,7 @@ const _EndCentralDirSig  = 0x06054b50
 const _ZipVersion = 20
 const Store = uint16(0)   # Compression method that does no compression
 const Deflate = uint16(8) # Deflate compression method
-const _Method2Str = (Uint16 => String)[Store => "Store", Deflate => "Deflate"]
+const _Method2Str = @compat Dict{Uint16,String}(Store => "Store", Deflate => "Deflate")
 
 type ReadableFile <: IO
 	_io :: IO
