@@ -467,7 +467,7 @@ function addfile(w::Writer, name::String; method::Integer=Store, mtime::Float64=
 	if f.method == Deflate
 		f._zio = Zlib.Writer(f._io, false, true)
 	end
-	w.files = [w.files, f]
+	w.files = [w.files; f]
 	w._current = f
 	w._current
 end
