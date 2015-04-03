@@ -58,30 +58,30 @@ const _LocalFileHdrSig   = 0x04034b50
 const _CentralDirSig     = 0x02014b50
 const _EndCentralDirSig  = 0x06054b50
 const _ZipVersion = 20
-const Store = uint16(0)   # Compression method that does no compression
-const Deflate = uint16(8) # Deflate compression method
-const _Method2Str = @compat Dict{Uint16,String}(Store => "Store", Deflate => "Deflate")
+const Store = @compat UInt16(0)   # Compression method that does no compression
+const Deflate = @compat UInt16(8) # Deflate compression method
+const _Method2Str = @compat Dict{UInt16,String}(Store => "Store", Deflate => "Deflate")
 
 type ReadableFile <: IO
 	_io :: IO
 	name :: String              # filename
-	method :: Uint16            # compression method
-	dostime :: Uint16           # modification time in MS-DOS format
-	dosdate :: Uint16           # modification date in MS-DOS format
-	crc32 :: Uint32             # CRC32 of uncompressed data
-	compressedsize :: Uint32    # file size after compression
-	uncompressedsize :: Uint32  # size of uncompressed file
-	_offset :: Uint32
+	method :: UInt16            # compression method
+	dostime :: UInt16           # modification time in MS-DOS format
+	dosdate :: UInt16           # modification date in MS-DOS format
+	crc32 :: UInt32             # CRC32 of uncompressed data
+	compressedsize :: UInt32    # file size after compression
+	uncompressedsize :: UInt32  # size of uncompressed file
+	_offset :: UInt32
 	_datapos :: Int64   # position where data begins
 	_zio :: IO          # compression IO
 
-	_currentcrc32 :: Uint32
+	_currentcrc32 :: UInt32
 	_pos :: Int64       # current position in uncompressed data
 	_zpos :: Int64      # current position in compressed data
 	
-	function ReadableFile(io::IO, name::String, method::Uint16, dostime::Uint16,
-			dosdate::Uint16, crc32::Uint32, compressedsize::Uint32,
-			uncompressedsize::Uint32, _offset::Uint32)
+	function ReadableFile(io::IO, name::String, method::UInt16, dostime::UInt16,
+			dosdate::UInt16, crc32::UInt32, compressedsize::UInt32,
+			uncompressedsize::UInt32, _offset::UInt32)
 		if method != Store && method != Deflate
 			error("unknown compression method $method")
 		end
@@ -115,21 +115,21 @@ end
 type WritableFile <: IO
 	_io :: IO
 	name :: String              # filename
-	method :: Uint16            # compression method
-	dostime :: Uint16           # modification time in MS-DOS format
-	dosdate :: Uint16           # modification date in MS-DOS format
-	crc32 :: Uint32             # CRC32 of uncompressed data
-	compressedsize :: Uint32    # file size after compression
-	uncompressedsize :: Uint32  # size of uncompressed file
-	_offset :: Uint32
+	method :: UInt16            # compression method
+	dostime :: UInt16           # modification time in MS-DOS format
+	dosdate :: UInt16           # modification date in MS-DOS format
+	crc32 :: UInt32             # CRC32 of uncompressed data
+	compressedsize :: UInt32    # file size after compression
+	uncompressedsize :: UInt32  # size of uncompressed file
+	_offset :: UInt32
 	_datapos :: Int64   # position where data begins
 	_zio :: IO          # compression IO
 	
 	_closed :: Bool
 	
-	function WritableFile(io::IO, name::String, method::Uint16, dostime::Uint16,
-			dosdate::Uint16, crc32::Uint32, compressedsize::Uint32,
-			uncompressedsize::Uint32, _offset::Uint32, _datapos::Int64,
+	function WritableFile(io::IO, name::String, method::UInt16, dostime::UInt16,
+			dosdate::UInt16, crc32::UInt32, compressedsize::UInt32,
+			uncompressedsize::UInt32, _offset::UInt32, _datapos::Int64,
 			_zio::IO, _closed::Bool)
 		if method != Store && method != Deflate
 			error("unknown compression method $method")
@@ -182,10 +182,10 @@ end
 include("deprecated.jl")
 include("iojunk.jl")
 
-readle(io::IO, ::Type{Uint32}) = htol(read(io, Uint32))
-readle(io::IO, ::Type{Uint16}) = htol(read(io, Uint16))
+readle(io::IO, ::Type{UInt32}) = htol(read(io, UInt32))
+readle(io::IO, ::Type{UInt16}) = htol(read(io, UInt16))
 
-function _writele(io::IO, x::Vector{Uint8})
+function _writele(io::IO, x::Vector{UInt8})
 	n = write(io, x)
 	if n != length(x)
 		error("short write")
@@ -193,8 +193,8 @@ function _writele(io::IO, x::Vector{Uint8})
 	n
 end
 
-_writele(io::IO, x::Uint16) = _writele(io, reinterpret(Uint8, [htol(x)]))
-_writele(io::IO, x::Uint32) = _writele(io, reinterpret(Uint8, [htol(x)]))
+_writele(io::IO, x::UInt16) = _writele(io, reinterpret(UInt8, [htol(x)]))
+_writele(io::IO, x::UInt32) = _writele(io, reinterpret(UInt8, [htol(x)]))
 
 # For MS-DOS time/date format, see:
 # http://msdn.microsoft.com/en-us/library/ms724247(v=VS.85).aspx
@@ -203,13 +203,13 @@ _writele(io::IO, x::Uint32) = _writele(io, reinterpret(Uint8, [htol(x)]))
 # a resolution of 2 seconds.
 function _msdostime(secs::Float64)
 	t = TmStruct(secs)
-	dostime = uint16((t.hour<<11) | (t.min<<5) | div(t.sec, 2))
-	dosdate = uint16(((t.year+1900-1980)<<9) | ((t.month+1)<<5) | t.mday)
+	dostime = @compat UInt16((t.hour<<11) | (t.min<<5) | div(t.sec, 2))
+	dosdate = @compat UInt16(((t.year+1900-1980)<<9) | ((t.month+1)<<5) | t.mday)
 	dostime, dosdate
 end
 
 # Convert MS-DOS time/date to seconds since epoch
-function _mtime(dostime::Uint16, dosdate::Uint16)
+function _mtime(dostime::UInt16, dosdate::UInt16)
 	sec = 2*(dostime & 0x1f)
 	min = (dostime>>5) & 0x3f
 	hour = dostime>>11
@@ -238,9 +238,9 @@ function _find_enddiroffset(io::IO)
 		k = min(filesize, guess)
 		n = filesize-k
 		seek(io, n)
-		b = read(io, Uint8, k)
+		b = read(io, UInt8, k)
 		for i in 1:k-3
-			if htol(reinterpret(Uint32, b[i:i+3]))[1] == _EndCentralDirSig
+			if htol(reinterpret(UInt32, b[i:i+3]))[1] == _EndCentralDirSig
 				offset = n+i-1
 				break
 			end
@@ -254,15 +254,15 @@ end
 
 function _find_diroffset(io::IO, enddiroffset::Integer)
 	seek(io, enddiroffset)
-	if readle(io, Uint32) != _EndCentralDirSig
+	if readle(io, UInt32) != _EndCentralDirSig
 		error("internal error")
 	end
 	skip(io, 2+2+2)
-	nfiles = read(io, Uint16)
+	nfiles = read(io, UInt16)
 	skip(io, 4)
-	offset = readle(io, Uint32)
-	commentlen = readle(io, Uint16)
-	comment = utf8(read(io, Uint8, commentlen))
+	offset = readle(io, UInt32)
+	commentlen = readle(io, UInt16)
+	comment = utf8(read(io, UInt8, commentlen))
 	offset, nfiles, comment
 end
 
@@ -270,26 +270,26 @@ function _getfiles(io::IO, diroffset::Integer, nfiles::Integer)
 	seek(io, diroffset)
 	files = Array(ReadableFile, nfiles)
 	for i in 1:nfiles
-		if readle(io, Uint32) != _CentralDirSig
+		if readle(io, UInt32) != _CentralDirSig
 			error("invalid file header")
 		end
 		skip(io, 2+2)
-		flag = readle(io, Uint16)
+		flag = readle(io, UInt16)
 		if (flag & (1<<0)) != 0
 			error("encryption not supported")
 		end
-		method = readle(io, Uint16)
-		dostime = readle(io, Uint16)
-		dosdate = readle(io, Uint16)
-		crc32 = readle(io, Uint32)
-		compsize = readle(io, Uint32)
-		uncompsize = readle(io, Uint32)
-		namelen = readle(io, Uint16)
-		extralen = readle(io, Uint16)
-		commentlen = readle(io, Uint16)
+		method = readle(io, UInt16)
+		dostime = readle(io, UInt16)
+		dosdate = readle(io, UInt16)
+		crc32 = readle(io, UInt32)
+		compsize = readle(io, UInt32)
+		uncompsize = readle(io, UInt32)
+		namelen = readle(io, UInt16)
+		extralen = readle(io, UInt16)
+		commentlen = readle(io, UInt16)
 		skip(io, 2+2+4)
-		offset = readle(io, Uint32)
-		name = utf8(read(io, Uint8, namelen))
+		offset = readle(io, UInt32)
+		name = utf8(read(io, UInt8, namelen))
 		skip(io, extralen+commentlen)
 		files[i] = ReadableFile(io, name, method, dostime, dosdate,
 			crc32, compsize, uncompsize, offset)
@@ -319,37 +319,37 @@ function close(w::Writer)
 	
 	# write central directory record
 	for f in w.files
-		_writele(w._io, uint32(_CentralDirSig))
-		_writele(w._io, uint16(_ZipVersion))
-		_writele(w._io, uint16(_ZipVersion))
-		_writele(w._io, uint16(0))
-		_writele(w._io, uint16(f.method))
-		_writele(w._io, uint16(f.dostime))
-		_writele(w._io, uint16(f.dosdate))
-		_writele(w._io, uint32(f.crc32))
-		_writele(w._io, uint32(f.compressedsize))
-		_writele(w._io, uint32(f.uncompressedsize))
-		b = convert(Vector{Uint8}, f.name)
-		_writele(w._io, uint16(length(b)))
-		_writele(w._io, uint16(0))
-		_writele(w._io, uint16(0))
-		_writele(w._io, uint16(0))
-		_writele(w._io, uint16(0))
-		_writele(w._io, uint32(0))
-		_writele(w._io, uint32(f._offset))
+		_writele(w._io, @compat UInt32(_CentralDirSig))
+		_writele(w._io, @compat UInt16(_ZipVersion))
+		_writele(w._io, @compat UInt16(_ZipVersion))
+		_writele(w._io, @compat UInt16(0))
+		_writele(w._io, @compat UInt16(f.method))
+		_writele(w._io, @compat UInt16(f.dostime))
+		_writele(w._io, @compat UInt16(f.dosdate))
+		_writele(w._io, @compat UInt32(f.crc32))
+		_writele(w._io, @compat UInt32(f.compressedsize))
+		_writele(w._io, @compat UInt32(f.uncompressedsize))
+		b = convert(Vector{UInt8}, f.name)
+		_writele(w._io, @compat UInt16(length(b)))
+		_writele(w._io, @compat UInt16(0))
+		_writele(w._io, @compat UInt16(0))
+		_writele(w._io, @compat UInt16(0))
+		_writele(w._io, @compat UInt16(0))
+		_writele(w._io, @compat UInt32(0))
+		_writele(w._io, @compat UInt32(f._offset))
 		_writele(w._io, b)
 		cdsize += 46+length(b)
 	end
 	
 	# write end of central directory
-	_writele(w._io, uint32(_EndCentralDirSig))
-	_writele(w._io, uint16(0))
-	_writele(w._io, uint16(0))
-	_writele(w._io, uint16(length(w.files)))
-	_writele(w._io, uint16(length(w.files)))
-	_writele(w._io, uint32(cdsize))
-	_writele(w._io, uint32(cdpos))
-	_writele(w._io, uint16(0))
+	_writele(w._io, @compat UInt32(_EndCentralDirSig))
+	_writele(w._io, @compat UInt16(0))
+	_writele(w._io, @compat UInt16(0))
+	_writele(w._io, @compat UInt16(length(w.files)))
+	_writele(w._io, @compat UInt16(length(w.files)))
+	_writele(w._io, @compat UInt32(cdsize))
+	_writele(w._io, @compat UInt32(cdpos))
+	_writele(w._io, @compat UInt16(0))
 	
 	close(w._io)
 end
@@ -368,9 +368,9 @@ function close(f::WritableFile)
 	
 	# fill in local file header fillers
 	seek(f._io, f._offset+14)	# seek to CRC-32
-	_writele(f._io, uint32(f.crc32))
-	_writele(f._io, uint32(f.compressedsize))
-	_writele(f._io, uint32(f.uncompressedsize))
+	_writele(f._io, @compat UInt32(f.crc32))
+	_writele(f._io, @compat UInt32(f.compressedsize))
+	_writele(f._io, @compat UInt32(f.uncompressedsize))
 	seekend(f._io)
 end
 
@@ -387,12 +387,12 @@ function read{T}(f::ReadableFile, a::Array{T})
 	
 	if f._datapos < 0
 		seek(f._io, f._offset)
-		if readle(f._io, Uint32) != _LocalFileHdrSig
+		if readle(f._io, UInt32) != _LocalFileHdrSig
 			error("invalid file header")
 		end
 		skip(f._io, 2+2+2+2+2+4+4+4)
-		filelen = readle(f._io, Uint16)
-		extralen = readle(f._io, Uint16)
+		filelen = readle(f._io, UInt16)
+		extralen = readle(f._io, UInt16)
 		skip(f._io, filelen+extralen)
 		if f.method == Deflate
 			f._zio = Zlib.Reader(f._io, true)
@@ -407,7 +407,7 @@ function read{T}(f::ReadableFile, a::Array{T})
 	end
 	
 	seek(f._io, f._datapos+f._zpos)
-	b = reinterpret(Uint8, reshape(a, length(a)))
+	b = reinterpret(UInt8, reshape(a, length(a)))
 	read!(f._zio, b)
 	f._zpos = position(f._io) - f._datapos
 	f._pos += length(b)
@@ -444,23 +444,23 @@ function addfile(w::Writer, name::String; method::Integer=Store, mtime::Float64=
 		mtime = time()
 	end
 	dostime, dosdate = _msdostime(mtime)
-	f = WritableFile(w._io, name, uint16(method), dostime, dosdate,
-		uint32(0), uint32(0), uint32(0), uint32(position(w._io)),
-		int64(-1), w._io, false)
+	f = WritableFile(w._io, name, @compat(UInt16(method)), dostime, dosdate,
+		@compat(UInt32(0)), @compat(UInt32(0)), @compat(UInt32(0)), @compat(UInt32(position(w._io))),
+		@compat(Int64(-1)), w._io, false)
 	
 	# Write local file header. Missing entries will be filled in later.
-	_writele(w._io, uint32(_LocalFileHdrSig))
-	_writele(w._io, uint16(_ZipVersion))
-	_writele(w._io, uint16(0))
-	_writele(w._io, uint16(f.method))
-	_writele(w._io, uint16(f.dostime))
-	_writele(w._io, uint16(f.dosdate))
-	_writele(w._io, uint32(f.crc32))	# filler
-	_writele(w._io, uint32(f.compressedsize))	# filler
-	_writele(w._io, uint32(f.uncompressedsize))	# filler
-	b = convert(Vector{Uint8}, f.name)
-	_writele(w._io, uint16(length(b)))
-	_writele(w._io, uint16(0))
+	_writele(w._io, @compat UInt32(_LocalFileHdrSig))
+	_writele(w._io, @compat UInt16(_ZipVersion))
+	_writele(w._io, @compat UInt16(0))
+	_writele(w._io, @compat UInt16(f.method))
+	_writele(w._io, @compat UInt16(f.dostime))
+	_writele(w._io, @compat UInt16(f.dosdate))
+	_writele(w._io, @compat UInt32(f.crc32))	# filler
+	_writele(w._io, @compat UInt32(f.compressedsize))	# filler
+	_writele(w._io, @compat UInt32(f.uncompressedsize))	# filler
+	b = convert(Vector{UInt8}, f.name)
+	_writele(w._io, @compat UInt16(length(b)))
+	_writele(w._io, @compat UInt16(0))
 	_writele(w._io, b)
 
 	f._datapos = position(w._io)
@@ -490,7 +490,7 @@ function write(f::WritableFile, p::Ptr, nb::Integer)
 	end
 	
 	a = pointer_to_array(p, nb)
-	b = reinterpret(Uint8, reshape(a, length(a)))
+	b = reinterpret(UInt8, reshape(a, length(a)))
 	f.crc32 = Zlib.crc32(b, f.crc32)
 	f.uncompressedsize += n
 	n
