@@ -1,4 +1,5 @@
 using Base.Test
+using Compat
 using ZipFile
 
 Debug = false
@@ -58,7 +59,7 @@ zipdata = [
 	("julia.txt", "julia\n"^10, ZipFile.Deflate),
 ]
 # 2013-08-16	9:42:24
-modtime = time(TmStruct(24, 42, 9, 16, 7, 2013-1900, 0, 0, -1))
+modtime = time(@compat(Libc.TmStruct(24, 42, 9, 16, 7, 2013-1900, 0, 0, -1)))
 
 dir = ZipFile.Writer("$tmp/hello.zip")
 @test length(string(dir)) > 0
@@ -90,15 +91,15 @@ write(f, s1)
 write(f, s2)
 close(dir)
 dir = ZipFile.Reader(filename)
-@test ascii(read(dir.files[1], Uint8, length(s1))) == s1
-@test ascii(read(dir.files[1], Uint8, length(s2))) == s2
+@test ascii(read(dir.files[1], @compat(UInt8), length(s1))) == s1
+@test ascii(read(dir.files[1], @compat(UInt8), length(s2))) == s2
 @test eof(dir.files[1])
 close(dir)
 
 
 data = {
-    uint8(20),
-    int(42),
+    @compat(UInt8(20)),
+    @compat(Int(42)),
     float(3.14),
     "julia",
     rand(5),
@@ -108,17 +109,17 @@ data = {
 filename = "$tmp/multi2.zip"
 dir = ZipFile.Writer(filename)
 f = ZipFile.addfile(dir, "data"; method=ZipFile.Deflate)
-@test_throws read(f, Uint8, 1)
+@test_throws ErrorException read(f, @compat(UInt8), 1)
 for x in data
     write(f, x)
 end
 close(dir)
 
 dir = ZipFile.Reader(filename)
-@test_throws write(dir.files[1], uint8(20))
+@test_throws ErrorException write(dir.files[1], @compat(UInt8(20)))
 for x in data
     if typeof(x) == ASCIIString
-        @test x == ASCIIString(read(dir.files[1], Uint8, length(x)))
+        @test x == ASCIIString(read(dir.files[1], @compat(UInt8), length(x)))
     elseif typeof(x) <: Array
         y = similar(x)
         y[:] = 0
