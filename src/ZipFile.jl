@@ -5,23 +5,23 @@
 #
 # The ZIP file format is described in
 # http://www.pkware.com/documents/casestudies/APPNOTE.TXT
-# 
+#
 # Example
 # -------
-# 
+#
 # Write a new ZIP file::
-# 
+#
 # 	using ZipFile
-# 	
+#
 # 	w = ZipFile.Writer("example.zip");
 # 	f = ZipFile.addfile(w, "hello.txt");
 # 	write(f, "hello world!\n");
 # 	f = ZipFile.addfile(w, "julia.txt", method=ZipFile.Deflate);
 # 	write(f, "Julia\n"^5);
 # 	close(w)
-# 
+#
 # Read and print out the contents of a ZIP file::
-# 
+#
 # 	r = ZipFile.Reader("example.zip");
 # 	for f in r.files
 # 		println("Filename: $(f.name)")
@@ -30,7 +30,7 @@
 # 	close(r)
 #
 # Output::
-# 
+#
 # 	Filename: hello.txt
 # 	hello world!
 # 	Filename: julia.txt
@@ -78,7 +78,7 @@ type ReadableFile <: IO
 	_currentcrc32 :: UInt32
 	_pos :: Int64       # current position in uncompressed data
 	_zpos :: Int64      # current position in compressed data
-	
+
 	function ReadableFile(io::IO, name::String, method::UInt16, dostime::UInt16,
 			dosdate::UInt16, crc32::UInt32, compressedsize::UInt32,
 			uncompressedsize::UInt32, _offset::UInt32)
@@ -94,7 +94,7 @@ type Reader
 	_io :: IO
 	files :: Vector{ReadableFile} # ZIP file entries that can be read concurrently
 	comment :: String             # ZIP file comment
-	
+
 	Reader(io::IO, files::Vector{ReadableFile}, comment::String) =
 		(x = new(io, files, comment); finalizer(x, close); x)
 end
@@ -124,9 +124,9 @@ type WritableFile <: IO
 	_offset :: UInt32
 	_datapos :: Int64   # position where data begins
 	_zio :: IO          # compression IO
-	
+
 	_closed :: Bool
-	
+
 	function WritableFile(io::IO, name::String, method::UInt16, dostime::UInt16,
 			dosdate::UInt16, crc32::UInt32, compressedsize::UInt32,
 			uncompressedsize::UInt32, _offset::UInt32, _datapos::Int64,
@@ -146,7 +146,7 @@ type Writer
 	files :: Vector{WritableFile} # files (being) written
 	_current :: Union(WritableFile, Nothing)
 	_closed :: Bool
-	
+
 	Writer(io::IO, files::Vector{WritableFile},
 		_current::Union(WritableFile, Nothing), _closed::Bool) =
 		(x = new(io, files, _current, _closed); finalizer(x, close); x)
@@ -173,9 +173,10 @@ function show(io::IO, rw::Union(Reader, Writer))
 	@printf(io, "%16s %-7s %-16s %s\n", "uncompressedsize", "method", "mtime", "name")
 	println(io, "-"^(16+1+7+1+16+1+4))
 	for f in rw.files
+        ftime = @compat Libc.strftime("%Y-%m-%d %H-%M", mtime(f))
 		@printf(io, "%16d %-7s %-16s %s\n",
-			f.uncompressedsize, _Method2Str[f.method],
-			strftime("%Y-%m-%d %H-%M", mtime(f)), f.name)
+			f.uncompressedsize, _Method2Str[f.method], ftime, f.name)
+
 	end
 end
 
@@ -202,7 +203,7 @@ _writele(io::IO, x::UInt32) = _writele(io, reinterpret(UInt8, [htol(x)]))
 # Convert seconds since epoch to MS-DOS time/date, which has
 # a resolution of 2 seconds.
 function _msdostime(secs::Float64)
-	t = TmStruct(secs)
+	t = @compat Libc.TmStruct(secs)
 	dostime = @compat UInt16((t.hour<<11) | (t.min<<5) | div(t.sec, 2))
 	dosdate = @compat UInt16(((t.year+1900-1980)<<9) | ((t.month+1)<<5) | t.mday)
 	dostime, dosdate
@@ -216,7 +217,7 @@ function _mtime(dostime::UInt16, dosdate::UInt16)
 	mday = dosdate & 0x1f
 	month = ((dosdate>>5) & 0xf) - 1
 	year = (dosdate>>9) + 1980 - 1900
-	time(TmStruct(sec, min, hour, mday, month, year, 0, 0, -1))
+	time(@compat Libc.TmStruct(sec, min, hour, mday, month, year, 0, 0, -1))
 end
 
 # Returns the modification time of f as seconds since epoch.
@@ -308,7 +309,7 @@ function close(w::Writer)
 		return
 	end
 	w._closed = true
-	
+
 	if !is(w._current, nothing)
 		close(w._current)
 		w._current = nothing
@@ -316,7 +317,7 @@ function close(w::Writer)
 
 	cdpos = position(w._io)
 	cdsize = 0
-	
+
 	# write central directory record
 	for f in w.files
 		_writele(w._io, @compat UInt32(_CentralDirSig))
@@ -340,7 +341,7 @@ function close(w::Writer)
 		_writele(w._io, b)
 		cdsize += 46+length(b)
 	end
-	
+
 	# write end of central directory
 	_writele(w._io, @compat UInt32(_EndCentralDirSig))
 	_writele(w._io, @compat UInt16(0))
@@ -350,7 +351,7 @@ function close(w::Writer)
 	_writele(w._io, @compat UInt32(cdsize))
 	_writele(w._io, @compat UInt32(cdpos))
 	_writele(w._io, @compat UInt16(0))
-	
+
 	close(w._io)
 end
 
@@ -360,12 +361,12 @@ function close(f::WritableFile)
 		return
 	end
 	f._closed = true
-	
+
 	if f.method == Deflate
 		close(f._zio)
 	end
 	f.compressedsize = position(f)
-	
+
 	# fill in local file header fillers
 	seek(f._io, f._offset+14)	# seek to CRC-32
 	_writele(f._io, @compat UInt32(f.crc32))
@@ -384,7 +385,7 @@ function read{T}(f::ReadableFile, a::Array{T})
 	if !isbits(T)
 		return invoke(read, (IO, Array), s, a)
 	end
-	
+
 	if f._datapos < 0
 		seek(f._io, f._offset)
 		if readle(f._io, UInt32) != _LocalFileHdrSig
@@ -401,18 +402,18 @@ function read{T}(f::ReadableFile, a::Array{T})
 		end
 		f._datapos = position(f._io)
 	end
-	
+
 	if eof(f) || f._pos+length(a)*sizeof(T) > f.uncompressedsize
 		throw(EOFError())
 	end
-	
+
 	seek(f._io, f._datapos+f._zpos)
 	b = reinterpret(UInt8, reshape(a, length(a)))
 	read!(f._zio, b)
 	f._zpos = position(f._io) - f._datapos
 	f._pos += length(b)
 	f._currentcrc32 = Zlib.crc32(b, f._currentcrc32)
-	
+
 	if eof(f)
 		if f.method == Deflate
 			close(f._zio)
@@ -439,7 +440,7 @@ function addfile(w::Writer, name::String; method::Integer=Store, mtime::Float64=
 		close(w._current)
 		w._current = nothing
 	end
-	
+
 	if mtime < 0
 		mtime = time()
 	end
@@ -447,7 +448,7 @@ function addfile(w::Writer, name::String; method::Integer=Store, mtime::Float64=
 	f = WritableFile(w._io, name, @compat(UInt16(method)), dostime, dosdate,
 		@compat(UInt32(0)), @compat(UInt32(0)), @compat(UInt32(0)), @compat(UInt32(position(w._io))),
 		@compat(Int64(-1)), w._io, false)
-	
+
 	# Write local file header. Missing entries will be filled in later.
 	_writele(w._io, @compat UInt32(_LocalFileHdrSig))
 	_writele(w._io, @compat UInt16(_ZipVersion))
@@ -488,7 +489,7 @@ function write(f::WritableFile, p::Ptr, nb::Integer)
 	if n != nb
 		error("short write")
 	end
-	
+
 	a = pointer_to_array(p, nb)
 	b = reinterpret(UInt8, reshape(a, length(a)))
 	f.crc32 = Zlib.crc32(b, f.crc32)
