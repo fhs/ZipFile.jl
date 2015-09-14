@@ -10,18 +10,37 @@ function write{T}(w::WritableFile, a::Array{T})
 end
 
 # Writer the content of a into w.
-function write{T,N,A<:Array}(w::WritableFile, a::SubArray{T,N,A})
-	# This function is copied from Julia base/io.jl
-	if !isbits(T) || stride(a,1)!=1
-		return invoke(write, (Any, AbstractArray), s, a)
+if isdefined(:CartesianRange)
+	function write{T,N,A<:Array}(w::WritableFile, a::SubArray{T,N,A})
+		# This function is copied from Julia base/io.jl
+		if !isbits(T) || stride(a,1)!=1
+			return invoke(write, (Any, AbstractArray), s, a)
+		end
+		colsz = size(a,1)*sizeof(T)
+		if N<=1
+			return write(w, pointer(a, 1), colsz)
+		else
+			# cartesianmap was deprecated by v0.4.0-RC1.
+			for idx in CartesianRange(tuple(1, size(a)[2:end]...))
+				write(w, pointer(a, idx.I), colsz)
+			end
+			return colsz*Base.trailingsize(a,2)
+		end
 	end
-	colsz = size(a,1)*sizeof(T)
-	if N<=1
-		return write(w, pointer(a, 1), colsz)
-	else
-		cartesianmap((idxs...)->write(w, pointer(a, idxs), colsz),
-			tuple(1, size(a)[2:end]...))
-		return colsz*Base.trailingsize(a,2)
+else
+	function write{T,N,A<:Array}(w::WritableFile, a::SubArray{T,N,A})
+		# This function is copied from Julia base/io.jl
+		if !isbits(T) || stride(a,1)!=1
+			return invoke(write, (Any, AbstractArray), s, a)
+		end
+		colsz = size(a,1)*sizeof(T)
+		if N<=1
+			return write(w, pointer(a, 1), colsz)
+		else
+			cartesianmap((idxs...)->write(w, pointer(a, idxs), colsz),
+				tuple(1, size(a)[2:end]...))
+			return colsz*Base.trailingsize(a,2)
+		end
 	end
 end
 

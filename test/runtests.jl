@@ -97,7 +97,7 @@ dir = ZipFile.Reader(filename)
 close(dir)
 
 
-data = {
+data = Any[
     @compat(UInt8(20)),
     @compat(Int(42)),
     float(3.14),
@@ -105,7 +105,7 @@ data = {
     rand(5),
     rand(3, 4),
     sub(rand(10,10), 2:8,2:4),
-}
+]
 filename = "$tmp/multi2.zip"
 dir = ZipFile.Writer(filename)
 f = ZipFile.addfile(dir, "data"; method=ZipFile.Deflate)
