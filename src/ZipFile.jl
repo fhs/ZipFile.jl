@@ -46,7 +46,7 @@ import Base: read, eof, write, close, mtime, position, show
 import Zlib
 using Compat
 
-export read, eof, write, close, mtime, position, show
+export read, eof, write, close, mtime, position, show, unzip
 
 if !isdefined(:read!)
     read! = read
@@ -495,6 +495,21 @@ function write(f::WritableFile, p::Ptr, nb::Integer)
 	f.crc32 = Zlib.crc32(b, f.crc32)
 	f.uncompressedsize += n
 	n
+end
+
+function unzip(inputfilename, outputpath=pwd())
+    r = Reader(inputfilename)
+    for f in r.files
+        outpath = joinpath(outputpath, f.name)
+        if isdirpath(outpath)
+            mkpath(outpath)
+        else
+            Base.open(outpath, "w") do io
+                write(io, readall(f))
+            end
+        end
+    end
+    nothing
 end
 
 end # module
