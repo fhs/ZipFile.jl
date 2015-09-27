@@ -60,11 +60,11 @@ const _EndCentralDirSig  = 0x06054b50
 const _ZipVersion = 20
 const Store = @compat UInt16(0)   # Compression method that does no compression
 const Deflate = @compat UInt16(8) # Deflate compression method
-const _Method2Str = @compat Dict{UInt16,String}(Store => "Store", Deflate => "Deflate")
+const _Method2Str = @compat Dict{UInt16,AbstractString}(Store => "Store", Deflate => "Deflate")
 
 type ReadableFile <: IO
 	_io :: IO
-	name :: String              # filename
+	name ::AbstractString              # filename
 	method :: UInt16            # compression method
 	dostime :: UInt16           # modification time in MS-DOS format
 	dosdate :: UInt16           # modification date in MS-DOS format
@@ -79,7 +79,7 @@ type ReadableFile <: IO
 	_pos :: Int64       # current position in uncompressed data
 	_zpos :: Int64      # current position in compressed data
 
-	function ReadableFile(io::IO, name::String, method::UInt16, dostime::UInt16,
+	function ReadableFile(io::IO, name::AbstractString, method::UInt16, dostime::UInt16,
 			dosdate::UInt16, crc32::UInt32, compressedsize::UInt32,
 			uncompressedsize::UInt32, _offset::UInt32)
 		if method != Store && method != Deflate
@@ -93,9 +93,9 @@ end
 type Reader
 	_io :: IO
 	files :: Vector{ReadableFile} # ZIP file entries that can be read concurrently
-	comment :: String             # ZIP file comment
+	comment ::AbstractString             # ZIP file comment
 
-	Reader(io::IO, files::Vector{ReadableFile}, comment::String) =
+	Reader(io::IO, files::Vector{ReadableFile}, comment::AbstractString) =
 		(x = new(io, files, comment); finalizer(x, close); x)
 end
 
@@ -108,13 +108,13 @@ function Reader(io::IO)
 end
 
 # Read a ZIP file from the file named filename.
-function Reader(filename::String)
+function Reader(filename::AbstractString)
 	Reader(Base.open(filename))
 end
 
 type WritableFile <: IO
 	_io :: IO
-	name :: String              # filename
+	name ::AbstractString              # filename
 	method :: UInt16            # compression method
 	dostime :: UInt16           # modification time in MS-DOS format
 	dosdate :: UInt16           # modification date in MS-DOS format
@@ -127,7 +127,7 @@ type WritableFile <: IO
 
 	_closed :: Bool
 
-	function WritableFile(io::IO, name::String, method::UInt16, dostime::UInt16,
+	function WritableFile(io::IO, name::AbstractString, method::UInt16, dostime::UInt16,
 			dosdate::UInt16, crc32::UInt32, compressedsize::UInt32,
 			uncompressedsize::UInt32, _offset::UInt32, _datapos::Int64,
 			_zio::IO, _closed::Bool)
@@ -144,11 +144,11 @@ end
 type Writer
 	_io :: IO
 	files :: Vector{WritableFile} # files (being) written
-	_current :: Union(WritableFile, Nothing)
+	_current :: Union{WritableFile, Void}
 	_closed :: Bool
 
 	Writer(io::IO, files::Vector{WritableFile},
-		_current::Union(WritableFile, Nothing), _closed::Bool) =
+		_current::Union{WritableFile, Void}, _closed::Bool) =
 		(x = new(io, files, _current, _closed); finalizer(x, close); x)
 end
 
@@ -158,17 +158,17 @@ function Writer(io::IO)
 end
 
 # Create a new ZIP file that will be written to the file named filename.
-function Writer(filename::String)
+function Writer(filename::AbstractString)
 	Writer(Base.open(filename, "w"))
 end
 
 # Print out a summary of f in a human-readable format.
-function show(io::IO, f::Union(ReadableFile, WritableFile))
+function show(io::IO, f::Union{ReadableFile, WritableFile})
 	print(io, "$(string(typeof(f)))(name=$(f.name), method=$(_Method2Str[f.method]), uncompresssedsize=$(f.uncompressedsize), compressedsize=$(f.compressedsize), mtime=$(mtime(f)))")
 end
 
 # Print out a summary of rw in a human-readable format.
-function show(io::IO, rw::Union(Reader, Writer))
+function show(io::IO, rw::Union{Reader, Writer})
 	println(io, "$(string(typeof(rw))) for $(rw._io) containing $(length(rw.files)) files:\n")
 	@printf(io, "%16s %-7s %-16s %s\n", "uncompressedsize", "method", "mtime", "name")
 	println(io, "-"^(16+1+7+1+16+1+4))
@@ -221,7 +221,7 @@ function _mtime(dostime::UInt16, dosdate::UInt16)
 end
 
 # Returns the modification time of f as seconds since epoch.
-function mtime(f::Union(ReadableFile, WritableFile))
+function mtime(f::Union{ReadableFile, WritableFile})
 	_mtime(f.dostime, f.dosdate)
 end
 
@@ -435,7 +435,7 @@ end
 # thus the file previously added using this function will be closed.
 # Method specifies the compression method that will be used, and mtime is the
 # modification time of the file.
-function addfile(w::Writer, name::String; method::Integer=Store, mtime::Float64=-1.0)
+function addfile(w::Writer, name::AbstractString; method::Integer=Store, mtime::Float64=-1.0)
 	if !is(w._current, nothing)
 		close(w._current)
 		w._current = nothing
