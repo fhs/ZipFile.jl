@@ -141,17 +141,29 @@ type WritableFile <: IO
 	end
 end
 
-type Writer
-	_io :: IO
-	files :: Vector{WritableFile} # files (being) written
-	_current :: Union{WritableFile, Void}
-	_closed :: Bool
+if VERSION > v"0.3.11" then
+	type Writer
+		_io :: IO
+		files :: Vector{WritableFile} # files (being) written
+		_current :: Union{WritableFile, Void}
+		_closed :: Bool
 
-	Writer(io::IO, files::Vector{WritableFile},
-		_current::Union{WritableFile, Void}, _closed::Bool) =
-		(x = new(io, files, _current, _closed); finalizer(x, close); x)
+		Writer(io::IO, files::Vector{WritableFile},
+			_current::Union{WritableFile, Void}, _closed::Bool) =
+			(x = new(io, files, _current, _closed); finalizer(x, close); x)
+	end
+else
+	type Writer
+		_io :: IO
+		files :: Vector{WritableFile} # files (being) written
+		_current :: Union(WritableFile, Nothing)
+		_closed :: Bool
+
+		Writer(io::IO, files::Vector{WritableFile},
+			_current::Union(WritableFile, Nothing), _closed::Bool) =
+			(x = new(io, files, _current, _closed); finalizer(x, close); x)
+	end
 end
-
 # Create a new ZIP file that will be written to io.
 function Writer(io::IO)
 	Writer(io, WritableFile[], nothing, false)
@@ -163,23 +175,44 @@ function Writer(filename::AbstractString)
 end
 
 # Print out a summary of f in a human-readable format.
-function show(io::IO, f::Union{ReadableFile, WritableFile})
-	print(io, "$(string(typeof(f)))(name=$(f.name), method=$(_Method2Str[f.method]), uncompresssedsize=$(f.uncompressedsize), compressedsize=$(f.compressedsize), mtime=$(mtime(f)))")
-end
-
-# Print out a summary of rw in a human-readable format.
-function show(io::IO, rw::Union{Reader, Writer})
-	println(io, "$(string(typeof(rw))) for $(rw._io) containing $(length(rw.files)) files:\n")
-	@printf(io, "%16s %-7s %-16s %s\n", "uncompressedsize", "method", "mtime", "name")
-	println(io, "-"^(16+1+7+1+16+1+4))
-	for f in rw.files
-        ftime = @compat Libc.strftime("%Y-%m-%d %H-%M", mtime(f))
-		@printf(io, "%16d %-7s %-16s %s\n",
-			f.uncompressedsize, _Method2Str[f.method], ftime, f.name)
-
+if VERSION > v"0.3.11" then
+	function show(io::IO, f::Union{ReadableFile, WritableFile})
+		print(io, "$(string(typeof(f)))(name=$(f.name), method=$(_Method2Str[f.method]), uncompresssedsize=$(f.uncompressedsize), compressedsize=$(f.compressedsize), mtime=$(mtime(f)))")
 	end
-end
+else
+	function show(io::IO, f::Union(ReadableFile, WritableFile))
+		print(io, "$(string(typeof(f)))(name=$(f.name), method=$(_Method2Str[f.method]), uncompresssedsize=$(f.uncompressedsize), compressedsize=$(f.compressedsize), mtime=$(mtime(f)))")
+	end
+end 
+# Print out a summary of rw in a human-readable format.
+if VERSION > v"0.3.11" then
+	function show(io::IO, rw::Union{Reader, Writer})
+		println(io, "$(string(typeof(rw))) for $(rw._io) containing $(length(rw.files)) files:\n")
+		@printf(io, "%16s %-7s %-16s %s\n", "uncompressedsize", "method", "mtime", "name")
+		println(io, "-"^(16+1+7+1+16+1+4))
+		for f in rw.files
+			ftime = @compat Libc.strftime("%Y-%m-%d %H-%M", mtime(f))
+			@printf(io, "%16d %-7s %-16s %s\n",
+				f.uncompressedsize, _Method2Str[f.method], ftime, f.name)
 
+		end
+	end
+else
+	function show(io::IO, rw::Union(Reader, Writer))
+		println(io, "$(string(typeof(rw))) for $(rw._io) containing $(length(rw.files)) files:\n")
+		@printf(io, "%16s %-7s %-16s %s\n", "uncompressedsize", "method", "mtime", "name")
+		println(io, "-"^(16+1+7+1+16+1+4))
+		for f in rw.files
+			ftime = @compat Libc.strftime("%Y-%m-%d %H-%M", mtime(f))
+			@printf(io, "%16d %-7s %-16s %s\n",
+				f.uncompressedsize, _Method2Str[f.method], ftime, f.name)
+
+		end
+	end
+end 
+	
+	
+	
 include("deprecated.jl")
 include("iojunk.jl")
 
@@ -221,10 +254,15 @@ function _mtime(dostime::UInt16, dosdate::UInt16)
 end
 
 # Returns the modification time of f as seconds since epoch.
-function mtime(f::Union{ReadableFile, WritableFile})
-	_mtime(f.dostime, f.dosdate)
-end
-
+if VERSION > v"0.3.11" then
+	function mtime(f::Union{ReadableFile, WritableFile})
+		_mtime(f.dostime, f.dosdate)
+	end
+else
+	function mtime(f::Union(ReadableFile, WritableFile))
+		_mtime(f.dostime, f.dosdate)
+	end
+end 
 function _find_enddiroffset(io::IO)
 	seekend(io)
 	filesize = position(io)
