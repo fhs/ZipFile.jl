@@ -228,12 +228,12 @@ end
 function _find_enddiroffset(io::IO)
 	seekend(io)
 	filesize = position(io)
-	offset = None
+	offset = nothing
 
 	# Look for end of central directory locator in the last 1KB.
 	# Failing that, look for it in the last 65KB.
 	for guess in [1024, 65*1024]
-		if ~is(offset, None)
+		if !is(offset, nothing)
 			break
 		end
 		k = min(filesize, guess)
@@ -247,7 +247,7 @@ function _find_enddiroffset(io::IO)
 			end
 		end
 	end
-	if is(offset, None)
+	if is(offset, nothing)
 		error("failed to find end of centeral directory record")
 	end
 	offset
