@@ -45,15 +45,15 @@ else
 end
 
 # Writer the byte b in w.
-function write(w::WritableFile, b::Uint8)
-	write(w, Uint8[b])
+function write(w::WritableFile, b::UInt8)
+	write(w, UInt8[b])
 end
 
 # Read and return a byte from f. Throws EOFError if there is no more byte to read.
-function read(f::ReadableFile, ::Type{Uint8})
+function read(f::ReadableFile, ::Type{UInt8})
 	# This function needs to be fast because readbytes, readall, etc.
 	# uses it. Avoid function calls when possible.
-	b = Array(Uint8, 1)
+	b = Array(UInt8, 1)
 	read(f, b)
 	b[1]
 end
