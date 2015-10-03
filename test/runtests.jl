@@ -10,7 +10,7 @@ function findfile(dir, name)
 			return f
 		end
 	end
-	None
+	nothing
 end
 
 function fileequals(f, s)
