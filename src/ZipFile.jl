@@ -352,7 +352,9 @@ function close(w::Writer)
 	_writele(w._io, @compat UInt32(cdpos))
 	_writele(w._io, @compat UInt16(0))
 
-	close(w._io)
+	if !isa(w._io, IOBuffer)
+		close(w._io)
+	end
 end
 
 # Flush the file f into the ZIP file.
