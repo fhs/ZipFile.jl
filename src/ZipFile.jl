@@ -20,6 +20,13 @@
 # 	write(f, "Julia\n"^5);
 # 	close(w)
 #
+# or
+#
+#       open("example.zip", "w") do f
+#           write(f, ZipFile.zipdict("hello.txt" => "hello world!\n",
+#                                    "julia.txt" => "Julia\n"^5))
+#       end
+#
 # Read and print out the contents of a ZIP file::
 #
 # 	r = ZipFile.Reader("example.zip");
@@ -46,7 +53,7 @@ import Base: read, eof, write, close, mtime, position, show
 import Zlib
 using Compat
 
-export read, eof, write, close, mtime, position, show
+export read, eof, write, close, mtime, position, show, zipdict
 
 if !isdefined(:read!)
     read! = read
@@ -498,5 +505,27 @@ function write(f::WritableFile, p::Ptr, nb::Integer)
 	f.uncompressedsize += n
 	n
 end
+
+
+function zipdict(d::Dict{AbstractString,Any})
+
+    io = IOBuffer()
+
+    w = ZipFile.Writer(io);
+    for (k,v) in d
+        f = ZipFile.addfile(w, k, method=ZipFile.Deflate)
+        write(f, v)
+        close(f)
+    end
+    close(w)
+
+    zip = takebuf_array(io)
+    close(io)
+
+    return zip
+end
+
+zipdict(args::Pair...) = zipdict(Dict{AbstractString,Any}(args))
+
 
 end # module
