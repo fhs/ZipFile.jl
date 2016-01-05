@@ -46,7 +46,8 @@ import Base: read, eof, write, close, mtime, position, show
 import Zlib
 using Compat
 
-export read, eof, write, close, mtime, position, show
+export create_zip, open_zip,
+       read, eof, write, close, mtime, position, show
 
 if !isdefined(:read!)
     read! = read
@@ -498,5 +499,12 @@ function write(f::WritableFile, p::Ptr, nb::Integer)
 	f.uncompressedsize += n
 	n
 end
+
+# Associative and iterator interface functions.
+include("create_zip.jl")
+include("open_zip.jl")
+import .CreateZip.create_zip
+import .OpenZip: open_zip, unzip
+
 
 end # module

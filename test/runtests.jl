@@ -137,3 +137,154 @@ close(dir)
 if !Debug
 	run(`rm -rf $tmp`)
 end
+
+
+# Command line "unzip" interface.
+
+function unzip_tool_is_missing()
+    try
+        readall(`unzip`)
+        return false
+    catch
+        println("WARNING: unzip tool not found!")
+        return true
+    end
+end
+
+# Unzip file to dict using external "unzip" tool.
+
+function test_unzip_file(z)
+    r = Dict()
+    for f in readlines(`unzip -Z1 $z`)
+        f = chomp(f)
+        r[f] = readall(`unzip -qc $z $f`)
+    end
+    return r
+end
+
+
+# Unzip zip data to dict using external "unzip" tool.
+
+function test_unzip(zip)
+    r = Dict()
+    z = tempname()
+    try
+        open(z, "w") do io 
+            write(io, zip)
+        end
+        return test_unzip_file(z)
+    finally
+        rm(z)
+    end
+end
+
+
+dict = Dict("hello.txt"     => "Hello!\n",
+            "foo/text.txt"  => "text\n")
+
+# In memory ZIP from Dict...
+@test dict == test_unzip(create_zip(dict))
+
+@test dict == Dict(open_zip(create_zip(dict)))
+
+@test open_zip(create_zip(dict))["hello.txt"] == "Hello!\n"
+
+# In memory ZIP from pairs...
+@test dict == test_unzip(create_zip("hello.txt"     => "Hello!\n",
+                                   "foo/text.txt"  => "text\n"))
+
+# In memory ZIP from tuples...
+@test dict == test_unzip(create_zip(("hello.txt",     "Hello!\n"),
+                                    ("foo/text.txt",  "text\n")))
+
+# In memory ZIP from tuples...
+@test dict == test_unzip(create_zip([("hello.txt",     "Hello!\n"),
+                                    ("foo/text.txt",  "text\n")]))
+
+# In memory ZIP from arrays...
+@test dict == test_unzip(create_zip(["hello.txt", "foo/text.txt"],
+                                    ["Hello!\n", "text\n"]))
+
+# In memory ZIP using "do"...
+zip_data = UInt8[]
+create_zip(zip_data) do z
+    z["hello.txt"] = "Hello!\n"
+    z["foo/text.txt"] = "text\n"
+end
+@test dict == Dict(open_zip(zip_data))
+ 
+
+# ZIP to file from Dict...
+unzip_dict = ""
+z = tempname()
+try
+    create_zip(z, dict)
+
+    @test unzip_tool_is_missing() || dict == test_unzip_file(z)
+
+    @test open_zip(z)["hello.txt"] == "Hello!\n"
+
+    @test dict == Dict(open_zip(z))
+
+finally
+    rm(z)
+end
+
+
+# ZIP to file from Pairs...
+unzip_dict = ""
+z = tempname()
+try
+    create_zip(z, "hello.txt"     => "Hello!\n",
+                  "foo/text.txt"  => "text\n")
+    @test unzip_tool_is_missing() || dict == test_unzip_file(z)
+    @test open_zip(z)["foo/text.txt"] == "text\n"
+finally
+    rm(z)
+end
+
+
+# Incremental ZIP to file...
+
+f = tempname()
+try
+    create_zip(f) do z
+        z["hello.txt"] = "Hello!\n"
+        z["foo/text.txt"] = "text\n"
+    end
+    @test dict == Dict(open_zip(f))
+finally
+    rm(f)
+end
+
+
+# Unzip file created by command-line "zip" tool...
+
+testzip = joinpath(Pkg.dir("ZipFile"),"test","test.zip")
+d = Dict(open_zip(testzip))
+@test sum(d["test.png"]) == 462242
+delete!(d, "test.png")
+@test dict == d
+
+
+# unzip()...
+
+mktempdir() do d
+    open(testzip) do io
+        ZipFile.unzip(io, d)
+    end
+    @test readall(joinpath(d, "hello.txt")) == "Hello!\n"
+    @test readall(joinpath(d, "foo/text.txt")) == "text\n"
+end
+
+mktempdir() do d
+    ZipFile.unzip(testzip, d)
+    @test readall(joinpath(d, "hello.txt")) == "Hello!\n"
+    @test readall(joinpath(d, "foo/text.txt")) == "text\n"
+end
+
+mktempdir() do d
+    ZipFile.unzip(create_zip(dict), d)
+    @test readall(joinpath(d, "hello.txt")) == "Hello!\n"
+    @test readall(joinpath(d, "foo/text.txt")) == "text\n"
+end

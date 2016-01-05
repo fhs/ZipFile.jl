@@ -57,3 +57,14 @@ function read(f::ReadableFile, ::Type{UInt8})
 	read(f, b)
 	b[1]
 end
+
+# with_close() do... syntax for exception safety.
+with_close(f::Function, io) = try f(io) finally close(io) end
+
+# Write "data" to "filename" (creating path as needed).
+function mkpath_write(filename::AbstractString, data)
+    mkpath(dirname(filename))
+    Base.open(filename, "w") do io
+        write(io, data)
+    end
+end
