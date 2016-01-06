@@ -93,19 +93,20 @@ end
 
 type Reader
 	_io :: IO
+    _close_io :: Bool
 	files :: Vector{ReadableFile} # ZIP file entries that can be read concurrently
 	comment :: UTF8String         # ZIP file comment
 
-	Reader(io::IO, files::Vector{ReadableFile}, comment::AbstractString) =
-		(x = new(io, files, comment); finalizer(x, close); x)
+	Reader(io::IO, close_io::Bool, files::Vector{ReadableFile}, comment::AbstractString) =
+		(x = new(io, close_io, files, comment); finalizer(x, close); x)
 end
 
 # Read a ZIP file from io.
-function Reader(io::IO)
+function Reader(io::IO; close_io=true)
 	endoff = _find_enddiroffset(io)
 	diroff, nfiles, comment = _find_diroffset(io, endoff)
 	files = _getfiles(io, diroff, nfiles)
-	Reader(io, files, comment)
+	Reader(io, close_io, files, comment)
 end
 
 # Read a ZIP file from the file named filename.
@@ -144,18 +145,19 @@ end
 
 type Writer
 	_io :: IO
+    _close_io :: Bool
 	files :: Vector{WritableFile} # files (being) written
 	_current :: (@compat Union{WritableFile, Void})
 	_closed :: Bool
 
-	Writer(io::IO, files::Vector{WritableFile},
+	Writer(io::IO, close_io::Bool, files::Vector{WritableFile},
 		_current :: (@compat Union{WritableFile, Void}), _closed::Bool) =
-		(x = new(io, files, _current, _closed); finalizer(x, close); x)
+		(x = new(io, close_io, files, _current, _closed); finalizer(x, close); x)
 end
 
 # Create a new ZIP file that will be written to io.
-function Writer(io::IO)
-	Writer(io, WritableFile[], nothing, false)
+function Writer(io::IO; close_io=true)
+	Writer(io, close_io, WritableFile[], nothing, false)
 end
 
 # Create a new ZIP file that will be written to the file named filename.
@@ -190,7 +192,7 @@ readle(io::IO, ::Type{UInt16}) = htol(read(io, UInt16))
 function _writele(io::IO, x::Vector{UInt8})
 	n = write(io, x)
 	if n != length(x)
-		error("short write")
+		error("short write ($n)")
 	end
 	n
 end
@@ -299,9 +301,12 @@ function _getfiles(io::IO, diroffset::Integer, nfiles::Integer)
 	files
 end
 
+
 # Close the underlying IO instance.
 function close(r::Reader)
-	close(r._io)
+	if r._close_io
+        close(r._io)
+    end
 end
 
 # Flush output and close the underlying IO instance.
@@ -353,7 +358,7 @@ function close(w::Writer)
 	_writele(w._io, @compat UInt32(cdpos))
 	_writele(w._io, @compat UInt16(0))
 
-	if !isa(w._io, IOBuffer)
+	if w._close_io
 		close(w._io)
 	end
 end
@@ -381,6 +386,13 @@ end
 # A no-op provided for completeness.
 function close(f::ReadableFile)
 	nothing
+end
+
+function rewind(f::ReadableFile)
+    f._datapos = -1
+    f._currentcrc32 = 0
+    f._pos = 0
+    f._zpos = 0
 end
 
 # Read data into a. Throws EOFError if a cannot be filled in completely.
@@ -488,6 +500,9 @@ end
 
 # Write nb elements located at p into f.
 function write(f::WritableFile, p::Ptr, nb::Integer)
+    if nb == 0
+        return 0
+    end
 	n = write(f._zio, p, nb)
 	if n != nb
 		error("short write")
@@ -501,10 +516,8 @@ function write(f::WritableFile, p::Ptr, nb::Integer)
 end
 
 # Associative and iterator interface functions.
-include("create_zip.jl")
 include("open_zip.jl")
-import .CreateZip.create_zip
-import .OpenZip: open_zip, unzip
+include("create_zip.jl")
 
 
 end # module

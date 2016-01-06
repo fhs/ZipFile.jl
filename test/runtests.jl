@@ -189,6 +189,8 @@ dict = Dict("hello.txt"     => "Hello!\n",
 
 @test open_zip(create_zip(dict))["hello.txt"] == "Hello!\n"
 
+@test open_zip(create_zip("empty" => ""))["empty"] == ""
+
 # In memory ZIP from pairs...
 @test dict == test_unzip(create_zip("hello.txt"     => "Hello!\n",
                                    "foo/text.txt"  => "text\n"))
@@ -207,7 +209,7 @@ dict = Dict("hello.txt"     => "Hello!\n",
 
 # In memory ZIP using "do"...
 zip_data = UInt8[]
-create_zip(zip_data) do z
+open_zip(zip_data) do z
     z["hello.txt"] = "Hello!\n"
     z["foo/text.txt"] = "text\n"
 end
@@ -217,7 +219,7 @@ end
 # ZIP to file from Dict...
 unzip_dict = ""
 z = tempname()
-try
+#try
     create_zip(z, dict)
 
     @test unzip_tool_is_missing() || dict == test_unzip_file(z)
@@ -226,9 +228,9 @@ try
 
     @test dict == Dict(open_zip(z))
 
-finally
-    rm(z)
-end
+#finally
+#    rm(z)
+##end
 
 
 # ZIP to file from Pairs...
@@ -248,14 +250,205 @@ end
 
 f = tempname()
 try
-    create_zip(f) do z
+    open_zip(f, "w") do z
         z["hello.txt"] = "Hello!\n"
         z["foo/text.txt"] = "text\n"
     end
     @test dict == Dict(open_zip(f))
+    open_zip(f) do z
+        @test z["hello.txt"] == "Hello!\n"
+        @test z["foo/text.txt"] == "text\n"
+        @test z["foo/text.txt"] == "text\n" # read again
+    end
+
+    # Add one file...
+    open_zip(f, "r+") do z
+        z["newfile"] = "new!\n"
+    end
+    open_zip(f) do z
+        @test z["hello.txt"] == "Hello!\n"
+        @test z["newfile"] == "new!\n"
+        @test z["foo/text.txt"] == "text\n"
+    end
+
+    # Read and write (read first)...
+    open_zip(f, "r+") do z
+        z["hello.txt"] *= "World!\n"
+        z["foo/bar.txt"] = "bar\n"
+        z["foo/text.txt.copy"] = z["foo/text.txt"] * "Copy\n"
+    end
+    open_zip(f) do z
+        @test z["hello.txt"] == "Hello!\nWorld!\n"
+        @test z["foo/bar.txt"] == "bar\n"
+        @test z["foo/text.txt"] == "text\n"
+        @test z["foo/text.txt.copy"] == "text\nCopy\n"
+        @test z["foo/text.txt.copy"] == "text\nCopy\n" # read again
+        @test z["newfile"] == "new!\n"
+    end
+
+    # Read and write (write first)...
+    open_zip(f, "r+") do z
+        z["foo/bar.txt"] = "bar\n"
+        z["foo/text.txt.copy"] = z["foo/text.txt"] * "Copy\n"
+    end
+    open_zip(f) do z
+        @test z["hello.txt"] == "Hello!\nWorld!\n"
+        @test z["foo/bar.txt"] == "bar\n"
+        @test z["foo/text.txt"] == "text\n"
+        @test z["foo/text.txt.copy"] == "text\nCopy\n"
+        @test z["newfile"] == "new!\n"
+    end
+
 finally
     rm(f)
 end
+
+# Write new file, then read...
+f = tempname()
+try
+    open_zip(f, "w+") do z
+        z["hello.txt"] = "Hello!\n"
+        z["foo/text.txt"] = "text\n"
+        @test z["hello.txt"] == "Hello!\n"
+    end
+    @test dict == Dict(open_zip(f))
+
+finally
+    rm(f)
+end
+
+
+# Write new file, then iterate...
+f = tempname()
+try
+    open_zip(f, "w+") do z
+        z["hello.txt"] = "Hello!\n"
+        z["foo/text.txt"] = "text\n"
+        @test [(n,v) for (n,v) in z] == [("hello.txt","Hello!\n"),("foo/text.txt","text\n")]
+    end
+    @test dict == Dict(open_zip(f))
+
+finally
+    rm(f)
+end
+
+
+# Write new file, then read and write...
+f = tempname()
+try
+    open_zip(f, "w+") do z
+        z["hello.txt"] = "Hello!\n"
+        z["foo/text.txt"] = "text\n"
+        @test z["foo/text.txt"] == "text\n"
+        @test z["hello.txt"] == "Hello!\n"
+        z["foo2/text.txt"] = "text\n"
+    end
+    open_zip(f) do z
+        @test z["hello.txt"] == "Hello!\n"
+        @test z["foo/text.txt"] == "text\n"
+        @test z["foo2/text.txt"] == "text\n"
+    end
+
+finally
+    rm(f)
+end
+
+
+
+# Incremental ZIP to buffer...
+
+buf = UInt8[]
+
+    open_zip(buf) do z
+        z["hello.txt"] = "Hello!\n"
+        z["foo/text.txt"] = "text\n"
+    end
+    @test dict == Dict(open_zip(buf))
+    open_zip(buf) do z
+        @test z["hello.txt"] == "Hello!\n"
+        @test z["foo/text.txt"] == "text\n"
+        @test z["foo/text.txt"] == "text\n" # read again
+    end
+
+    # Add one file...
+    open_zip(buf) do z
+        z["newfile"] = "new!\n"
+    end
+    open_zip(buf) do z
+        @test z["hello.txt"] == "Hello!\n"
+        @test z["newfile"] == "new!\n"
+        @test z["foo/text.txt"] == "text\n"
+    end
+
+    # Read and write (read first)...
+    open_zip(buf) do z
+        z["hello.txt"] *= "World!\n"
+        z["foo/bar.txt"] = "bar\n"
+        z["foo/text.txt.copy"] = z["foo/text.txt"] * "Copy\n"
+    end
+    open_zip(buf) do z
+        @test z["hello.txt"] == "Hello!\nWorld!\n"
+        @test z["foo/bar.txt"] == "bar\n"
+        @test z["foo/text.txt"] == "text\n"
+        @test z["foo/text.txt.copy"] == "text\nCopy\n"
+        @test z["foo/text.txt.copy"] == "text\nCopy\n" # read again
+        @test z["newfile"] == "new!\n"
+    end
+
+    # Read and write (write first)...
+    open_zip(buf) do z
+        z["foo/bar.txt"] = "bar\n"
+        z["foo/text.txt.copy"] = z["foo/text.txt"] * "Copy\n"
+    end
+    open_zip(buf) do z
+        @test z["hello.txt"] == "Hello!\nWorld!\n"
+        @test z["foo/bar.txt"] == "bar\n"
+        @test z["foo/text.txt"] == "text\n"
+        @test z["foo/text.txt.copy"] == "text\nCopy\n"
+        @test z["newfile"] == "new!\n"
+    end
+
+
+# Write new buffer, then read...
+buf = UInt8[]
+
+    open_zip(buf) do z
+        z["hello.txt"] = "Hello!\n"
+        z["foo/text.txt"] = "text\n"
+        @test z["hello.txt"] == "Hello!\n"
+    end
+    @test dict == Dict(open_zip(buf))
+
+
+
+# Write new buffer, then iterate...
+buf = UInt8[]
+
+    open_zip(buf) do z
+        z["hello.txt"] = "Hello!\n"
+        z["foo/text.txt"] = "text\n"
+        @test [(n,v) for (n,v) in z] == [("hello.txt","Hello!\n"),("foo/text.txt","text\n")]
+    end
+    @test dict == Dict(open_zip(buf))
+
+
+
+# Write new buffer, then read and write...
+buf = UInt8[]
+
+    open_zip(buf) do z
+        z["hello.txt"] = "Hello!\n"
+        z["foo/text.txt"] = "text\n"
+        @test z["foo/text.txt"] == "text\n"
+        @test z["hello.txt"] == "Hello!\n"
+        z["foo2/text.txt"] = "text\n"
+    end
+    open_zip(buf) do z
+        @test z["hello.txt"] == "Hello!\n"
+        @test z["foo/text.txt"] == "text\n"
+        @test z["foo2/text.txt"] == "text\n"
+    end
+
 
 
 # Unzip file created by command-line "zip" tool...
