@@ -468,6 +468,9 @@ mktempdir() do d
     end
     @test readall(joinpath(d, "hello.txt")) == "Hello!\n"
     @test readall(joinpath(d, "foo/text.txt")) == "text\n"
+
+    @test dict == cd(()->Dict(open_zip(create_zip(["hello.txt", "foo/text.txt"]))), d)
+
 end
 
 mktempdir() do d

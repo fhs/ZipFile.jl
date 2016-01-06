@@ -21,10 +21,16 @@ create_zip{T<:Tuple}(io::IO, files::Array{T}) = create_zip(io, files...)
 create_zip(io::IO, files::Array, data::Array) = create_zip(io, zip(files, data)...)
 
 
+# Write to ZIP format from filenames.
+
+function create_zip(io::IO, files::Array)
+    create_zip(io::IO, files, [Base.open(readbytes, f) for f in files])
+end
+
+
 # Write to ZIP format from filename => data pairs.
 
 create_zip(io::IO, args...) = create_zip(io::IO, Dict(args))
-
 
 
 # Write ZIP Archive to "filename".
