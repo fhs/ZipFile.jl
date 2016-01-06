@@ -166,16 +166,11 @@ end
 # Unzip zip data to dict using external "unzip" tool.
 
 function test_unzip(zip)
-    r = Dict()
-    z = tempname()
-    try
-        open(z, "w") do io 
-            write(io, zip)
-        end
-        return test_unzip_file(z)
-    finally
-        rm(z)
-    end
+    mktemp((tmp,io)-> begin
+        write(io, zip)
+        close(io)
+        return test_unzip_file(tmp)
+    end)
 end
 
 
