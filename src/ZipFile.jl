@@ -498,6 +498,11 @@ end
 
 # Write nb elements located at p into f.
 function write(f::WritableFile, p::Ptr, nb::Integer)
+	# zlib doesn't like 0 length writes
+	if nb == 0
+		return 0
+	end
+
 	n = write(f._zio, p, nb)
 	if n != nb
 		error("short write")

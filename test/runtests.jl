@@ -57,6 +57,8 @@ zipdata = [
 	("hello.txt", "hello world!\n", ZipFile.Store),
 	("info.txt", "Julia\nfor\ntechnical computing\n", ZipFile.Store),
 	("julia.txt", "julia\n"^10, ZipFile.Deflate),
+	("empty1.txt", "", ZipFile.Store),
+	("empty2.txt", "", ZipFile.Deflate),
 ]
 # 2013-08-16	9:42:24
 modtime = time(@compat(Libc.TmStruct(24, 42, 9, 16, 7, 2013-1900, 0, 0, -1)))
