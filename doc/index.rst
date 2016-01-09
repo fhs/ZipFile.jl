@@ -20,7 +20,7 @@ Example
 Write a new ZIP file::
 
 	using ZipFile
-	
+
 	w = ZipFile.Writer("example.zip");
 	f = ZipFile.addfile(w, "hello.txt");
 	write(f, "hello world!\n");
@@ -59,21 +59,21 @@ Constants
 ---------
 .. code-block:: julia
 
-	const Store = 0		# Compression method that does no compression
-	const Deflate = 8	# Deflate compression method
+	const Store = @compat UInt16(0)   # Compression method that does no compression
+	const Deflate = @compat UInt16(8) # Deflate compression method
 
 Type ReadableFile
 -----------------
 .. code-block:: julia
 
 	type ReadableFile <: IO
-		name :: String              # filename
-		method :: Uint16            # compression method
-		dostime :: Uint16           # modification time in MS-DOS format
-		dosdate :: Uint16           # modification date in MS-DOS format
-		crc32 :: Uint32             # CRC32 of uncompressed data
-		compressedsize :: Uint32    # file size after compression
-		uncompressedsize :: Uint32  # size of uncompressed file
+		name :: UTF8String          # filename
+		method :: UInt16            # compression method
+		dostime :: UInt16           # modification time in MS-DOS format
+		dosdate :: UInt16           # modification date in MS-DOS format
+		crc32 :: UInt32             # CRC32 of uncompressed data
+		compressedsize :: UInt32    # file size after compression
+		uncompressedsize :: UInt32  # size of uncompressed file
 	end
 
 Type Reader
@@ -82,14 +82,14 @@ Type Reader
 
 	type Reader
 		files :: Vector{ReadableFile} # ZIP file entries that can be read concurrently
-		comment :: String             # ZIP file comment
+		comment :: UTF8String         # ZIP file comment
 	end
 
 .. function::  Reader(io::IO)
 
 Read a ZIP file from io.
 
-.. function::  Reader(filename::String)
+.. function::  Reader(filename::AbstractString)
 
 Read a ZIP file from the file named filename.
 
@@ -98,13 +98,13 @@ Type WritableFile
 .. code-block:: julia
 
 	type WritableFile <: IO
-		name :: String              # filename
-		method :: Uint16            # compression method
-		dostime :: Uint16           # modification time in MS-DOS format
-		dosdate :: Uint16           # modification date in MS-DOS format
-		crc32 :: Uint32             # CRC32 of uncompressed data
-		compressedsize :: Uint32    # file size after compression
-		uncompressedsize :: Uint32  # size of uncompressed file
+		name :: UTF8String          # filename
+		method :: UInt16            # compression method
+		dostime :: UInt16           # modification time in MS-DOS format
+		dosdate :: UInt16           # modification date in MS-DOS format
+		crc32 :: UInt32             # CRC32 of uncompressed data
+		compressedsize :: UInt32    # file size after compression
+		uncompressedsize :: UInt32  # size of uncompressed file
 	end
 
 Type Writer
@@ -119,23 +119,23 @@ Type Writer
 
 Create a new ZIP file that will be written to io.
 
-.. function::  Writer(filename::String)
+.. function::  Writer(filename::AbstractString)
 
 Create a new ZIP file that will be written to the file named filename.
 
 Function show
 -------------
-.. function::  show(io::IO, f::Union(ReadableFile, WritableFile))
+.. function::  show(io::IO, f::@compat Union{ReadableFile, WritableFile})
 
 Print out a summary of f in a human-readable format.
 
-.. function::  show(io::IO, rw::Union(Reader, Writer))
+.. function::  show(io::IO, rw::@compat Union{Reader, Writer})
 
 Print out a summary of rw in a human-readable format.
 
 Function mtime
 --------------
-.. function::  mtime(f::Union(ReadableFile, WritableFile))
+.. function::  mtime(f::@compat Union{ReadableFile, WritableFile})
 
 Returns the modification time of f as seconds since epoch.
 
@@ -143,11 +143,13 @@ Function close
 --------------
 .. function::  close(r::Reader)
 
-Close the underlying IO instance.
+Close the underlying IO instance if it was opened by Reader.
+User is still responsible for closing the IO instance if it was passed to Reader.
 
 .. function::  close(w::Writer)
 
-Flush output and close the underlying IO instance.
+Finish writing the ZIP file and close the underlying IO instance if it was opened by Writer.
+User is still responsible for closing the IO instance if it was passed to Writer.
 
 .. function::  close(f::WritableFile)
 
@@ -163,7 +165,7 @@ Function read
 
 Read data into a. Throws EOFError if a cannot be filled in completely.
 
-.. function::  read(f::ReadableFile, ::Type{Uint8})
+.. function::  read(f::ReadableFile, ::Type{UInt8})
 
 Read and return a byte from f. Throws EOFError if there is no more byte to read.
 
@@ -175,7 +177,7 @@ Returns true if and only if we have reached the end of file f.
 
 Function addfile
 ----------------
-.. function::  addfile(w::Writer, name::String; method::Integer=Store, mtime::Float64=-1.0)
+.. function::  addfile(w::Writer, name::AbstractString; method::Integer=Store, mtime::Float64=-1.0)
 
 Add a new file named name into the ZIP file writer w, and return the
 WritableFile for the new file. We don't allow concurrrent writes,
@@ -203,11 +205,7 @@ Write nb elements located at p into f.
 
 Writer the content of a into w.
 
-.. function::  write{T,N,A<:Array}(w::WritableFile, a::SubArray{T,N,A})
-
-Writer the content of a into w.
-
-.. function::  write(w::WritableFile, b::Uint8)
+.. function::  write(w::WritableFile, b::UInt8)
 
 Writer the byte b in w.
 
