@@ -92,24 +92,28 @@ end
 
 type Reader
 	_io :: IO
+	_close_io :: Bool
 	files :: Vector{ReadableFile} # ZIP file entries that can be read concurrently
 	comment :: UTF8String         # ZIP file comment
 
-	Reader(io::IO, files::Vector{ReadableFile}, comment::AbstractString) =
-		(x = new(io, files, comment); finalizer(x, close); x)
+	function Reader(io::IO, close_io::Bool)
+		endoff = _find_enddiroffset(io)
+		diroff, nfiles, comment = _find_diroffset(io, endoff)
+		files = _getfiles(io, diroff, nfiles)
+		x = new(io, close_io, files, comment)
+		finalizer(x, close)
+		x
+	end
 end
 
 # Read a ZIP file from io.
 function Reader(io::IO)
-	endoff = _find_enddiroffset(io)
-	diroff, nfiles, comment = _find_diroffset(io, endoff)
-	files = _getfiles(io, diroff, nfiles)
-	Reader(io, files, comment)
+	Reader(io, false)
 end
 
 # Read a ZIP file from the file named filename.
 function Reader(filename::AbstractString)
-	Reader(Base.open(filename))
+	Reader(Base.open(filename), true)
 end
 
 type WritableFile <: IO
@@ -143,23 +147,26 @@ end
 
 type Writer
 	_io :: IO
+	_close_io :: Bool
 	files :: Vector{WritableFile} # files (being) written
 	_current :: (@compat Union{WritableFile, Void})
 	_closed :: Bool
 
-	Writer(io::IO, files::Vector{WritableFile},
-		_current :: (@compat Union{WritableFile, Void}), _closed::Bool) =
-		(x = new(io, files, _current, _closed); finalizer(x, close); x)
+	function Writer(io::IO, close_io::Bool)
+		x = new(io, close_io, WritableFile[], nothing, false)
+		finalizer(x, close)
+		x
+	end
 end
 
 # Create a new ZIP file that will be written to io.
 function Writer(io::IO)
-	Writer(io, WritableFile[], nothing, false)
+	Writer(io, false)
 end
 
 # Create a new ZIP file that will be written to the file named filename.
 function Writer(filename::AbstractString)
-	Writer(Base.open(filename, "w"))
+	Writer(Base.open(filename, "w"), true)
 end
 
 # Print out a summary of f in a human-readable format.
@@ -298,12 +305,16 @@ function _getfiles(io::IO, diroffset::Integer, nfiles::Integer)
 	files
 end
 
-# Close the underlying IO instance.
+# Close the underlying IO instance if it was opened by Reader.
+# User is still responsible for closing the IO instance if it was passed to Reader.
 function close(r::Reader)
-	close(r._io)
+	if r._close_io
+		close(r._io)
+	end
 end
 
-# Flush output and close the underlying IO instance.
+# Finish writing the ZIP file and close the underlying IO instance if it was opened by Writer.
+# User is still responsible for closing the IO instance if it was passed to Writer.
 function close(w::Writer)
 	if w._closed
 		return
@@ -352,7 +363,7 @@ function close(w::Writer)
 	_writele(w._io, @compat UInt32(cdpos))
 	_writele(w._io, @compat UInt16(0))
 
-	if !isa(w._io, IOBuffer)
+	if w._close_io
 		close(w._io)
 	end
 end
