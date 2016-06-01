@@ -49,7 +49,7 @@ using Compat
 export read, eof, write, close, mtime, position, show
 
 if !isdefined(:read!)
-    read! = read
+	read! = read
 end
 
 # TODO: ZIP64 support, data descriptor support
@@ -57,6 +57,8 @@ end
 const _LocalFileHdrSig   = 0x04034b50
 const _CentralDirSig     = 0x02014b50
 const _EndCentralDirSig  = 0x06054b50
+const _Zip64EndCentralLocSig = 0x07064b50
+const _Zip64EndCentralDirSig = 0x06064b50
 const _ZipVersion = 20
 const Store = @compat UInt16(0)   # Compression method that does no compression
 const Deflate = @compat UInt16(8) # Deflate compression method
@@ -69,9 +71,9 @@ type ReadableFile <: IO
 	dostime :: UInt16           # modification time in MS-DOS format
 	dosdate :: UInt16           # modification date in MS-DOS format
 	crc32 :: UInt32             # CRC32 of uncompressed data
-	compressedsize :: UInt32    # file size after compression
-	uncompressedsize :: UInt32  # size of uncompressed file
-	_offset :: UInt32
+	compressedsize :: UInt64    # file size after compression
+	uncompressedsize :: UInt64  # size of uncompressed file
+	_offset :: UInt64
 	_datapos :: Int64   # position where data begins
 	_zio :: IO          # compression IO
 
@@ -80,13 +82,13 @@ type ReadableFile <: IO
 	_zpos :: Int64      # current position in compressed data
 
 	function ReadableFile(io::IO, name::AbstractString, method::UInt16, dostime::UInt16,
-			dosdate::UInt16, crc32::UInt32, compressedsize::UInt32,
-			uncompressedsize::UInt32, _offset::UInt32)
+		dosdate::UInt16, crc32::UInt32, compressedsize::Unsigned,
+		uncompressedsize::Unsigned, _offset::Unsigned)
 		if method != Store && method != Deflate
 			error("unknown compression method $method")
 		end
 		new(io, name, method, dostime, dosdate, crc32,
-			compressedsize, uncompressedsize, _offset, -1, io, 0, 0, 0)
+		compressedsize, uncompressedsize, _offset, -1, io, 0, 0, 0)
 	end
 end
 
@@ -132,14 +134,14 @@ type WritableFile <: IO
 	_closed :: Bool
 
 	function WritableFile(io::IO, name::AbstractString, method::UInt16, dostime::UInt16,
-			dosdate::UInt16, crc32::UInt32, compressedsize::UInt32,
-			uncompressedsize::UInt32, _offset::UInt32, _datapos::Int64,
-			_zio::IO, _closed::Bool)
+		dosdate::UInt16, crc32::UInt32, compressedsize::UInt32,
+		uncompressedsize::UInt32, _offset::UInt32, _datapos::Int64,
+		_zio::IO, _closed::Bool)
 		if method != Store && method != Deflate
 			error("unknown compression method $method")
 		end
 		f = new(io, name, method, dostime, dosdate, crc32,
-			compressedsize, uncompressedsize, _offset, _datapos, _zio, _closed)
+		compressedsize, uncompressedsize, _offset, _datapos, _zio, _closed)
 		finalizer(f, close)
 		f
 	end
@@ -180,9 +182,9 @@ function show(io::IO, rw::@compat Union{Reader, Writer})
 	@printf(io, "%16s %-7s %-16s %s\n", "uncompressedsize", "method", "mtime", "name")
 	println(io, "-"^(16+1+7+1+16+1+4))
 	for f in rw.files
-        ftime = @compat Libc.strftime("%Y-%m-%d %H-%M", mtime(f))
+		ftime = @compat Libc.strftime("%Y-%m-%d %H-%M", mtime(f))
 		@printf(io, "%16d %-7s %-16s %s\n",
-			f.uncompressedsize, _Method2Str[f.method], ftime, f.name)
+		f.uncompressedsize, _Method2Str[f.method], ftime, f.name)
 
 	end
 end
@@ -190,6 +192,7 @@ end
 include("deprecated.jl")
 include("iojunk.jl")
 
+readle(io::IO, ::Type{UInt64}) = htol(read(io, UInt64))
 readle(io::IO, ::Type{UInt32}) = htol(read(io, UInt32))
 readle(io::IO, ::Type{UInt16}) = htol(read(io, UInt16))
 
@@ -232,7 +235,7 @@ function mtime(f::@compat Union{ReadableFile, WritableFile})
 	_mtime(f.dostime, f.dosdate)
 end
 
-function _find_enddiroffset(io::IO)
+function _find_sigoffset(io::IO, sig :: UInt32)
 	seekend(io)
 	filesize = position(io)
 	offset = nothing
@@ -248,7 +251,7 @@ function _find_enddiroffset(io::IO)
 		seek(io, n)
 		b = read(io, UInt8, k)
 		for i in 1:k-3
-			if htol(reinterpret(UInt32, b[i:i+3]))[1] == _EndCentralDirSig
+			if htol(reinterpret(UInt32, b[i:i+3]))[1] == sig
 				offset = n+i-1
 				break
 			end
@@ -260,6 +263,28 @@ function _find_enddiroffset(io::IO)
 	offset
 end
 
+_find_enddiroffset(io::IO) = _find_sigoffset(io, _EndCentralDirSig)
+_find_zip64_enddirlocoffset(io::IO) = _find_sigoffset(io, _Zip64EndCentralLocSig)
+
+function _find_zip64_enddiroffset(io::IO, locoffset::Integer)
+	seek(io, locoffset)
+	if readle(io, UInt32) != _Zip64EndCentralLocSig
+		error("internal error")
+	end
+	skip(io, 4)
+	readle(io, UInt64) #the offset of the z64ecd
+end
+function _find_zip64_diroffset(io::IO, enddiroffset::Integer)
+	seek(io, enddiroffset)
+	if readle(io, UInt32) != _Zip64EndCentralDirSig
+		error("internal error")
+	end
+	skip(io, 8+2+2+4+4+8)
+	nfiles = readle(io, UInt64)
+	skip(io, 8) #skip size of central directory
+	offset = readle(io, UInt64)
+	offset, nfiles
+end
 function _find_diroffset(io::IO, enddiroffset::Integer)
 	seek(io, enddiroffset)
 	if readle(io, UInt32) != _EndCentralDirSig
@@ -271,6 +296,11 @@ function _find_diroffset(io::IO, enddiroffset::Integer)
 	offset = readle(io, UInt32)
 	commentlen = readle(io, UInt16)
 	comment = utf8(read(io, UInt8, commentlen))
+	if nfiles == 0xFFFF || offset == 0xFFFFFFFF
+		dirloc = _find_zip64_enddirlocoffset(io)
+		z64enddiroffset = _find_zip64_enddiroffset(io::IO, dirloc)
+		offset, nfiles = _find_zip64_diroffset(io, z64enddiroffset)
+	end
 	offset, nfiles, comment
 end
 
@@ -298,13 +328,33 @@ function _getfiles(io::IO, diroffset::Integer, nfiles::Integer)
 		skip(io, 2+2+4)
 		offset = readle(io, UInt32)
 		name = utf8(read(io, UInt8, namelen))
-		skip(io, extralen+commentlen)
+		extra = read(io, UInt8, extralen)
+		extrabuf = IOBuffer(extra)
+		while !eof(extrabuf)
+			extraid = readle(extrabuf, UInt16)
+			extrasz = readle(extrabuf, UInt16)
+			if extraid == 0x0001
+				if uncompsize == 0xFFFFFFFF
+					uncompsize = readle(extrabuf, UInt64)
+				end
+				if compsize == 0xFFFFFFFF
+					compsize = readle(extrabuf, UInt64)
+				end
+				if offset == 0xFFFFFFFF
+					offset = readle(extrabuf, UInt64)
+				end
+			else
+				skip(extrabuf, extrasz)
+			end
+
+		end
+
+		skip(io, commentlen)
 		files[i] = ReadableFile(io, name, method, dostime, dosdate,
-			crc32, compsize, uncompsize, offset)
+		crc32, compsize, uncompsize, offset)
 	end
 	files
 end
-
 # Close the underlying IO instance if it was opened by Reader.
 # User is still responsible for closing the IO instance if it was passed to Reader.
 function close(r::Reader)
@@ -459,8 +509,8 @@ function addfile(w::Writer, name::AbstractString; method::Integer=Store, mtime::
 	end
 	dostime, dosdate = _msdostime(mtime)
 	f = WritableFile(w._io, name, @compat(UInt16(method)), dostime, dosdate,
-		@compat(UInt32(0)), @compat(UInt32(0)), @compat(UInt32(0)), @compat(UInt32(position(w._io))),
-		@compat(Int64(-1)), w._io, false)
+	  @compat(UInt32(0)), @compat(UInt32(0)), @compat(UInt32(0)), @compat(UInt32(position(w._io))),
+	  @compat(Int64(-1)), w._io, false)
 
 	# Write local file header. Missing entries will be filled in later.
 	_writele(w._io, @compat UInt32(_LocalFileHdrSig))
