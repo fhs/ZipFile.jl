@@ -48,6 +48,8 @@ import .Zlib
 const _LocalFileHdrSig   = 0x04034b50
 const _CentralDirSig     = 0x02014b50
 const _EndCentralDirSig  = 0x06054b50
+const _Zip64EndCentralLocSig = 0x07064b50
+const _Zip64EndCentralDirSig = 0x06064b50
 const _ZipVersion = 20
 
 "Compression method that does no compression"
@@ -65,9 +67,9 @@ mutable struct ReadableFile <: IO
     dostime :: UInt16           # modification time in MS-DOS format
     dosdate :: UInt16           # modification date in MS-DOS format
     crc32 :: UInt32             # CRC32 of uncompressed data
-    compressedsize :: UInt32    # file size after compression
-    uncompressedsize :: UInt32  # size of uncompressed file
-    _offset :: UInt32
+    compressedsize :: UInt64    # file size after compression
+    uncompressedsize :: UInt64  # size of uncompressed file
+    _offset :: UInt64
     _datapos :: Int64   # position where data begins
     _zio :: IO          # compression IO
 
@@ -75,15 +77,15 @@ mutable struct ReadableFile <: IO
     _pos :: Int64       # current position in uncompressed data
     _zpos :: Int64      # current position in compressed data
 
-    function ReadableFile(io::IO, name::AbstractString, method::UInt16, dostime::UInt16,
-            dosdate::UInt16, crc32::UInt32, compressedsize::UInt32,
-            uncompressedsize::UInt32, _offset::UInt32)
-        if method != Store && method != Deflate
-            error("unknown compression method $method")
-        end
-        new(io, name, method, dostime, dosdate, crc32,
-            compressedsize, uncompressedsize, _offset, -1, io, 0, 0, 0)
-    end
+	function ReadableFile(io::IO, name::AbstractString, method::UInt16, dostime::UInt16,
+		dosdate::UInt16, crc32::UInt32, compressedsize::Unsigned,
+		uncompressedsize::Unsigned, _offset::Unsigned)
+		if method != Store && method != Deflate
+			error("unknown compression method $method")
+		end
+		new(io, name, method, dostime, dosdate, crc32,
+		    compressedsize, uncompressedsize, _offset, -1, io, 0, 0, 0)
+	end
 end
 
 """
@@ -208,6 +210,7 @@ else
     utf8_validate(vec::Vector{UInt8}) = utf8(vec)
 end
 
+readle(io::IO, ::Type{UInt64}) = htol(read(io, UInt64))
 readle(io::IO, ::Type{UInt32}) = htol(read(io, UInt32))
 readle(io::IO, ::Type{UInt16}) = htol(read(io, UInt16))
 
@@ -259,7 +262,7 @@ function getindex_u32le(b::Vector{UInt8}, i)
     return (b3 << 24) | (b2 << 16) | (b1 << 8) | b0
 end
 
-function _find_enddiroffset(io::IO)
+function _find_sigoffset(io::IO, sig::UInt32)
     seekend(io)
     filesize = position(io)
     offset = nothing
@@ -275,7 +278,7 @@ function _find_enddiroffset(io::IO)
         seek(io, n)
         b = read!(io, Array{UInt8}(undef, k))
         for i in k-3:-1:1
-            if getindex_u32le(b, i) == _EndCentralDirSig
+            if getindex_u32le(b, i) == sig
                 offset = n+i-1
                 break
             end
@@ -287,19 +290,47 @@ function _find_enddiroffset(io::IO)
     offset
 end
 
-function _find_diroffset(io::IO, enddiroffset::Integer)
-    seek(io, enddiroffset)
-    if readle(io, UInt32) != _EndCentralDirSig
-        error("internal error")
-    end
-    skip(io, 2+2+2)
-    nfiles = read(io, UInt16)
-    skip(io, 4)
-    offset = readle(io, UInt32)
-    commentlen = readle(io, UInt16)
-    comment = utf8_validate(read!(io, Array{UInt8}(undef, commentlen)))
-    offset, nfiles, comment
+_find_enddiroffset(io::IO) = _find_sigoffset(io, _EndCentralDirSig)
+_find_zip64_enddirlocoffset(io::IO) = _find_sigoffset(io, _Zip64EndCentralLocSig)
+
+function _find_zip64_enddiroffset(io::IO, locoffset::Integer)
+	seek(io, locoffset)
+	if readle(io, UInt32) != _Zip64EndCentralLocSig
+		error("internal error")
+	end
+	skip(io, 4)
+	readle(io, UInt64) #the offset of the z64ecd
 end
+function _find_zip64_diroffset(io::IO, enddiroffset::Integer)
+	seek(io, enddiroffset)
+	if readle(io, UInt32) != _Zip64EndCentralDirSig
+		error("internal error")
+	end
+	skip(io, 8+2+2+4+4+8)
+	nfiles = readle(io, UInt64)
+	skip(io, 8) #skip size of central directory
+	offset = readle(io, UInt64)
+	offset, nfiles
+end
+function _find_diroffset(io::IO, enddiroffset::Integer)
+	seek(io, enddiroffset)
+	if readle(io, UInt32) != _EndCentralDirSig
+		error("internal error")
+	end
+	skip(io, 2+2+2)
+	nfiles = read(io, UInt16)
+	skip(io, 4)
+	offset = readle(io, UInt32)
+	commentlen = readle(io, UInt16)
+    comment = utf8_validate(read!(io, Array{UInt8}(undef, commentlen)))
+	if nfiles == 0xFFFF || offset == 0xFFFFFFFF
+		dirloc = _find_zip64_enddirlocoffset(io)
+		z64enddiroffset = _find_zip64_enddiroffset(io::IO, dirloc)
+		offset, nfiles = _find_zip64_diroffset(io, z64enddiroffset)
+	end
+	offset, nfiles, comment
+end
+
 
 function _getfiles(io::IO, diroffset::Integer, nfiles::Integer)
     seek(io, diroffset)
@@ -313,6 +344,7 @@ function _getfiles(io::IO, diroffset::Integer, nfiles::Integer)
         if (flag & (1<<0)) != 0
             error("encryption not supported")
         end
+
         method = readle(io, UInt16)
         dostime = readle(io, UInt16)
         dosdate = readle(io, UInt16)
@@ -325,13 +357,32 @@ function _getfiles(io::IO, diroffset::Integer, nfiles::Integer)
         skip(io, 2+2+4)
         offset = readle(io, UInt32)
         name = utf8_validate(read!(io, Array{UInt8}(undef, namelen)))
-        skip(io, extralen+commentlen)
+        extra = read!(io, Array{UInt8}(undef, extralen))
+        extrabuf = IOBuffer(extra)
+        while !eof(extrabuf)
+            extraid = readle(extrabuf, UInt16)
+            extrasz = readle(extrabuf, UInt16)
+            if extraid == 0x0001
+                if uncompsize == 0xFFFFFFFF
+                    uncompsize = readle(extrabuf, UInt64)
+                end
+                if compsize == 0xFFFFFFFF
+                    compsize = readle(extrabuf, UInt64)
+                end
+                if offset == 0xFFFFFFFF
+                    offset = readle(extrabuf, UInt64)
+                end
+            else
+                skip(extrabuf, extrasz)
+            end
+
+        end
+        skip(io, commentlen)
         files[i] = ReadableFile(io, name, method, dostime, dosdate,
             crc32, compsize, uncompsize, offset)
     end
     files
 end
-
 # Close the underlying IO instance if it was opened by Reader.
 # User is still responsible for closing the IO instance if it was passed to Reader.
 function close(r::Reader)
@@ -551,6 +602,7 @@ function addfile(w::Writer, name::AbstractString; method::Integer=Store, mtime::
         close(w._current)
         w._current = nothing
     end
+
 
     if mtime < 0
         mtime = time()
