@@ -408,7 +408,7 @@ end
 # Read data into a. Throws EOFError if a cannot be filled in completely.
 function read{T}(f::ReadableFile, a::Array{T})
 	if !isbits(T)
-		return invoke(read, (IO, Array), s, a)
+		return @compat invoke(read, Tuple{IO,Array}, s, a)
 	end
 
 	if f._datapos < 0

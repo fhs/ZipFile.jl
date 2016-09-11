@@ -6,7 +6,7 @@ if !isdefined(Base, :unsafe_write)
 		if isbits(T)
 			write(w, pointer(a), length(a)*sizeof(T))
 		else
-			invoke(write, (IO, Array), w, a)
+			@compat invoke(write, Tuple{IO,Array}, w, a)
 		end
 	end
 	# Writer the content of a into w.
@@ -14,7 +14,7 @@ if !isdefined(Base, :unsafe_write)
 		function write{T,N,A<:Array}(w::WritableFile, a::SubArray{T,N,A})
 			# This function is copied from Julia base/io.jl
 			if !isbits(T) || stride(a,1)!=1
-				return invoke(write, (Any, AbstractArray), s, a)
+				return @compat invoke(write, Tuple{Any,AbstractArray}, s, a)
 			end
 			colsz = size(a,1)*sizeof(T)
 			if N<=1
@@ -31,7 +31,7 @@ if !isdefined(Base, :unsafe_write)
 		function write{T,N,A<:Array}(w::WritableFile, a::SubArray{T,N,A})
 			# This function is copied from Julia base/io.jl
 			if !isbits(T) || stride(a,1)!=1
-				return invoke(write, (Any, AbstractArray), s, a)
+				return @compat invoke(write, Tuple{Any,AbstractArray}, s, a)
 			end
 			colsz = size(a,1)*sizeof(T)
 			if N<=1
