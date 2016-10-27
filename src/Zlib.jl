@@ -155,6 +155,8 @@ function write(w::Writer, p::Ptr, nb::Integer)
     nb
 end
 
+write(w::Writer, a::Array{UInt8}) = write(w, pointer(a), length(a))
+
 # If this is not provided, Base.IO write methods will write
 # arrays one element at a time.
 function write{T}(w::Writer, a::Array{T})
