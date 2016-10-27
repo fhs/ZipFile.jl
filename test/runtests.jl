@@ -14,7 +14,7 @@ function findfile(dir, name)
 end
 
 function fileequals(f, s)
-	readall(f) == s
+	readstring(f) == s
 end
 
 
@@ -120,8 +120,8 @@ close(dir)
 dir = ZipFile.Reader(filename)
 @test_throws ErrorException write(dir.files[1], @compat(UInt8(20)))
 for x in data
-    if typeof(x) == ASCIIString
-        @test x == ASCIIString(read(dir.files[1], @compat(UInt8), length(x)))
+    if typeof(x) == String
+        @test x == String(read(dir.files[1], @compat(UInt8), length(x)))
     elseif typeof(x) <: Array
         y = similar(x)
         y[:] = 0
@@ -139,3 +139,5 @@ close(dir)
 if !Debug
 	run(`rm -rf $tmp`)
 end
+
+print("done\n")
