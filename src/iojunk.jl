@@ -1,4 +1,9 @@
 # Writer the content of a into w.
+if isempty(methods(write, @compat Tuple{Zlib.Writer,Vector{UInt8}}))
+	# Monkey patches `Zlib`
+	write(w::Zlib.Writer, a::Array{UInt8}) = write(w, pointer(a), length(a))
+end
+
 if !isdefined(Base, :unsafe_write)
 	function write{T}(w::WritableFile, a::Array{T})
 		# If this is not provided, Base.IO write methods will write
