@@ -252,7 +252,7 @@ function _find_enddiroffset(io::IO)
 	# Look for end of central directory locator in the last 1KB.
 	# Failing that, look for it in the last 65KB.
 	for guess in [1024, 65*1024]
-		if !is(offset, nothing)
+		if offset !== nothing
 			break
 		end
 		k = min(filesize, guess)
@@ -266,7 +266,7 @@ function _find_enddiroffset(io::IO)
 			end
 		end
 	end
-	if is(offset, nothing)
+	if offset === nothing
 		error("failed to find end of centeral directory record")
 	end
 	offset
@@ -333,7 +333,7 @@ function close(w::Writer)
 	end
 	w._closed = true
 
-	if !is(w._current, nothing)
+	if w._current !== nothing
 		close(w._current)
 		w._current = nothing
 	end
@@ -461,7 +461,7 @@ end
 # Method specifies the compression method that will be used, and mtime is the
 # modification time of the file.
 function addfile(w::Writer, name::AbstractString; method::Integer=Store, mtime::Float64=-1.0)
-	if !is(w._current, nothing)
+	if w._current !== nothing
 		close(w._current)
 		w._current = nothing
 	end
