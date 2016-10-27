@@ -1,6 +1,12 @@
 # Writer the content of a into w.
-function write(w::WritableFile, a::Array{UInt8})
-	write(w, pointer(a), length(a))
+function write{T}(w::WritableFile, a::Array{T})
+	# If this is not provided, Base.IO write methods will write
+	# arrays one element at a time.
+	if isbits(T)
+		write(w, pointer(a), length(a)*sizeof(T))
+	else
+		invoke(write, (IO, Array), w, a)
+	end
 end
 
 # Writer the content of a into w.

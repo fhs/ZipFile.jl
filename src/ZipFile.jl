@@ -60,11 +60,11 @@ const _EndCentralDirSig  = 0x06054b50
 const _ZipVersion = 20
 const Store = @compat UInt16(0)   # Compression method that does no compression
 const Deflate = @compat UInt16(8) # Deflate compression method
-const _Method2Str = @compat Dict{UInt16,String}(Store => "Store", Deflate => "Deflate")
+const _Method2Str = @compat Dict{UInt16,UTF8String}(Store => "Store", Deflate => "Deflate")
 
 type ReadableFile <: IO
 	_io :: IO
-	name :: String          # filename
+	name :: UTF8String          # filename
 	method :: UInt16            # compression method
 	dostime :: UInt16           # modification time in MS-DOS format
 	dosdate :: UInt16           # modification date in MS-DOS format
@@ -94,7 +94,7 @@ type Reader
 	_io :: IO
 	_close_io :: Bool
 	files :: Vector{ReadableFile} # ZIP file entries that can be read concurrently
-	comment :: String         # ZIP file comment
+	comment :: UTF8String         # ZIP file comment
 
 	function Reader(io::IO, close_io::Bool)
 		endoff = _find_enddiroffset(io)
@@ -118,7 +118,7 @@ end
 
 type WritableFile <: IO
 	_io :: IO
-	name :: String          # filename
+	name :: UTF8String          # filename
 	method :: UInt16            # compression method
 	dostime :: UInt16           # modification time in MS-DOS format
 	dosdate :: UInt16           # modification date in MS-DOS format
@@ -270,7 +270,7 @@ function _find_diroffset(io::IO, enddiroffset::Integer)
 	skip(io, 4)
 	offset = readle(io, UInt32)
 	commentlen = readle(io, UInt16)
-	comment = String(read(io, UInt8, commentlen))
+	comment = utf8(read(io, UInt8, commentlen))
 	offset, nfiles, comment
 end
 
@@ -297,7 +297,7 @@ function _getfiles(io::IO, diroffset::Integer, nfiles::Integer)
 		commentlen = readle(io, UInt16)
 		skip(io, 2+2+4)
 		offset = readle(io, UInt32)
-		name = String(read(io, UInt8, namelen))
+		name = utf8(read(io, UInt8, namelen))
 		skip(io, extralen+commentlen)
 		files[i] = ReadableFile(io, name, method, dostime, dosdate,
 			crc32, compsize, uncompsize, offset)
@@ -508,7 +508,7 @@ function write(f::WritableFile, p::Ptr, nb::Integer)
 		error("short write")
 	end
 
-	a = unsafe_wrap(Array, p, nb)
+	a = pointer_to_array(p, nb)
 	b = reinterpret(UInt8, reshape(a, length(a)))
 	f.crc32 = Zlib.crc32(b, f.crc32)
 	f.uncompressedsize += n
