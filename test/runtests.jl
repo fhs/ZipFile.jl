@@ -139,3 +139,5 @@ close(dir)
 if !Debug
 	rm(tmp, recursive=true)
 end
+
+println("done")

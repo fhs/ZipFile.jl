@@ -44,7 +44,6 @@ isdefined(Base, :__precompile__) && __precompile__()
 module ZipFile
 
 import Base: read, eof, write, close, mtime, position, show
-import Zlib
 using Compat
 import Compat: unsafe_write
 
@@ -53,6 +52,9 @@ export read, eof, write, close, mtime, position, show
 if !isdefined(:read!)
     read! = read
 end
+
+include("Zlib.jl")
+import .Zlib
 
 # TODO: ZIP64 support, data descriptor support
 
