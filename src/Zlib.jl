@@ -49,8 +49,11 @@ const Z_MEM_ERROR     = -4
 const Z_BUF_ERROR     = -5
 const Z_VERSION_ERROR = -6
 
-@unix_only const libz = "libz"
-@windows_only const libz = "zlib1"
+if is_windows()
+    const libz = "zlib1"
+else
+    const libz = "libz"
+end
 
 # The zlib z_stream structure.
 type z_stream
@@ -93,24 +96,6 @@ type z_stream
     end
 end
 
-type gz_header
-    text::Cint          # true if compressed data believed to be text
-    time::Culong        # modification time
-    xflags::Cint        # extra flags (not used when writing a gzip file)
-    os::Cint            # operating system
-    extra::Ptr{UInt8}   # pointer to extra field or Z_NULL if none
-    extra_len::Cuint    # extra field length (valid if extra != Z_NULL)
-    extra_max::Cuint    # space at extra (only when reading header)
-    name::Ptr{UInt8}    # pointer to zero-terminated file name or Z_NULL
-    name_max::Cuint     # space at name (only when reading header)
-    comment::Ptr{UInt8} # pointer to zero-terminated comment or Z_NULL
-    comm_max::Cuint     # space at comment (only when reading header)
-    hcrc::Cint          # true if there was or will be a header crc
-    done::Cint          # true when done reading gzip header (not used
-                        # when writing a gzip file)
-    gz_header() = new(0,0,0,0,0,0,0,0,0,0,0,0,0)
-end
-
 function zlib_version()
     ccall((:zlibVersion, libz), Ptr{UInt8}, ())
 end
@@ -124,7 +109,7 @@ type Writer <: IO
         (w = new(strm, io, closed); finalizer(w, close); w)
 end
 
-function Writer(io::IO, level::Integer, gzip::Bool=false, raw::Bool=false)
+function Writer(io::IO, level::Integer, raw::Bool=false)
     if !(1 <= level <= 9)
         error("Invalid zlib compression level.")
     end
@@ -132,26 +117,16 @@ function Writer(io::IO, level::Integer, gzip::Bool=false, raw::Bool=false)
     strm = z_stream()
     ret = ccall((:deflateInit2_, libz),
                 Int32, (Ptr{z_stream}, Cint, Cint, Cint, Cint, Cint, Ptr{UInt8}, Int32),
-                &strm, level, 8, raw? -15 : 15+gzip*16, 8, 0, zlib_version(), sizeof(z_stream))
+                &strm, level, 8, raw? -15 : 15, 8, 0, zlib_version(), sizeof(z_stream))
 
     if ret != Z_OK
         error("Error initializing zlib deflate stream.")
     end
 
-    if gzip && false
-        hdr = gz_header()
-        ret = ccall((:deflateSetHeader, libz),
-            Cint, (Ptr{z_stream}, Ptr{gz_header}),
-            &strm, &hdr)
-        if ret != Z_OK
-            error("Error setting gzip stream header.")
-        end
-    end
-
     Writer(strm, io, false)
 end
 
-Writer(io::IO, gzip::Bool=false, raw::Bool=false) = Writer(io, 9, gzip, raw)
+Writer(io::IO, raw::Bool=false) = Writer(io, 9, raw)
 
 function write(w::Writer, p::Ptr, nb::Integer)
     w.strm.next_in = p
@@ -251,23 +226,6 @@ function close(w::Writer)
         error("Error: zlib deflate stream was prematurely freed.")
     end
 end
-
-function compress(input::Vector{UInt8}, level::Integer, gzip::Bool=false, raw::Bool=false)
-    b = IOBuffer()
-    w = Writer(b, level, gzip, raw)
-    write(w, input)
-    close(w)
-    takebuf_array(b)
-end
-
-
-function compress(input::AbstractString, level::Integer, gzip::Bool=false, raw::Bool=false)
-    compress(convert(Vector{UInt8}, input), level, gzip, raw)
-end
-
-
-compress(input::Vector{UInt8}, gzip::Bool=false, raw::Bool=false) = compress(input, 9, gzip, raw)
-compress(input::AbstractString, gzip::Bool=false, raw::Bool=false) = compress(input, 9, gzip, raw)
 
 
 type Reader <: IO
@@ -408,20 +366,6 @@ function eof(r::Reader)
     # reached EOF yet.
     nb_available(r.buf) == 0 && eof(r.io)
 end
-
-function decompress(input::Vector{UInt8}, raw::Bool=false)
-    r = Reader(IOBuffer(input), raw)
-    b = readbytes(r)
-    if !r.stream_end
-        error("Error: zlib compressed data is incomplete or truncated")
-    end
-    close(r)
-    b
-end
-
-
-decompress(input::AbstractString, raw::Bool=false) = decompress(convert(Vector{UInt8}, input), raw)
-
 
 function crc32(data::Vector{UInt8}, crc::Integer=0)
     convert(UInt32, (ccall((:crc32, libz),

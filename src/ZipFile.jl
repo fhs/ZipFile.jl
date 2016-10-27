@@ -493,7 +493,7 @@ function addfile(w::Writer, name::AbstractString; method::Integer=Store, mtime::
 
 	f._datapos = position(w._io)
 	if f.method == Deflate
-		f._zio = Zlib.Writer(f._io, false, true)
+		f._zio = Zlib.Writer(f._io, true)
 	end
 	w.files = [w.files; f]
 	w._current = f
