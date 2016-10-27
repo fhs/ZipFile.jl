@@ -33,7 +33,7 @@ Read and print out the contents of a ZIP file::
 	r = ZipFile.Reader("example.zip");
 	for f in r.files
 		println("Filename: $(f.name)")
-		write(readall(f));
+		write(readstring(f));
 	end
 	close(r)
 
@@ -67,7 +67,7 @@ Type ReadableFile
 .. code-block:: julia
 
 	type ReadableFile <: IO
-		name :: UTF8String          # filename
+		name :: String              # filename
 		method :: UInt16            # compression method
 		dostime :: UInt16           # modification time in MS-DOS format
 		dosdate :: UInt16           # modification date in MS-DOS format
@@ -82,7 +82,7 @@ Type Reader
 
 	type Reader
 		files :: Vector{ReadableFile} # ZIP file entries that can be read concurrently
-		comment :: UTF8String         # ZIP file comment
+		comment :: String             # ZIP file comment
 	end
 
 .. function::  Reader(io::IO)
@@ -98,7 +98,7 @@ Type WritableFile
 .. code-block:: julia
 
 	type WritableFile <: IO
-		name :: UTF8String          # filename
+		name :: String              # filename
 		method :: UInt16            # compression method
 		dostime :: UInt16           # modification time in MS-DOS format
 		dosdate :: UInt16           # modification date in MS-DOS format
@@ -197,7 +197,7 @@ Returns the current position in file f.
 
 Function write
 --------------
-.. function::  write(f::WritableFile, p::Ptr, nb::Integer)
+.. function::  unsafe_write(f::WritableFile, p::Ptr{UInt8}, nb::UInt)
 
 Write nb elements located at p into f.
 

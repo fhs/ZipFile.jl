@@ -14,12 +14,12 @@ function findfile(dir, name)
 end
 
 function fileequals(f, s)
-	readall(f) == s
+	readstring(f) == s
 end
 
 
 # test a zip file created using Info-Zip
-dir = ZipFile.Reader(joinpath(Pkg.dir("ZipFile"), "test/infozip.zip"))
+dir = ZipFile.Reader(joinpath(dirname(@__FILE__), "infozip.zip"))
 @test length(dir.files) == 4
 
 f = findfile(dir, "ziptest/")
@@ -93,8 +93,8 @@ write(f, s1)
 write(f, s2)
 close(dir)
 dir = ZipFile.Reader(filename)
-@test ascii(read(dir.files[1], @compat(UInt8), length(s1))) == s1
-@test ascii(read(dir.files[1], @compat(UInt8), length(s2))) == s2
+@test Compat.ASCIIString(read(dir.files[1], @compat(UInt8), length(s1))) == s1
+@test Compat.ASCIIString(read(dir.files[1], @compat(UInt8), length(s2))) == s2
 @test eof(dir.files[1])
 close(dir)
 
@@ -106,7 +106,7 @@ data = Any[
     "julia",
     rand(5),
     rand(3, 4),
-    sub(rand(10,10), 2:8,2:4),
+    Compat.view(rand(10,10), 2:8,2:4),
 ]
 filename = "$tmp/multi2.zip"
 dir = ZipFile.Writer(filename)
@@ -120,14 +120,14 @@ close(dir)
 dir = ZipFile.Reader(filename)
 @test_throws ErrorException write(dir.files[1], @compat(UInt8(20)))
 for x in data
-    if typeof(x) == ASCIIString
-        @test x == ASCIIString(read(dir.files[1], @compat(UInt8), length(x)))
-    elseif typeof(x) <: Array
+    if isa(x, Compat.ASCIIString)
+        @test x == Compat.ASCIIString(read(dir.files[1], @compat(UInt8), length(x)))
+    elseif isa(x, Array)
         y = similar(x)
         y[:] = 0
         @test x == read(dir.files[1], y)
         @test x == y
-    elseif typeof(x) <: SubArray
+    elseif isa(x, SubArray)
         continue # Base knows how to write, but not read
     else
         @test x == read(dir.files[1], typeof(x))
@@ -137,5 +137,5 @@ close(dir)
 
 
 if !Debug
-	run(`rm -rf $tmp`)
+	rm(tmp, recursive=true)
 end
