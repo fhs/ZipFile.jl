@@ -163,14 +163,14 @@ function write{T}(w::Writer, a::Array{T})
     if isbits(T)
         write(w, pointer(a), length(a)*sizeof(T))
     else
-        invoke(write, (IO, Array), w, a)
+        invoke(write, Tuple{IO,Array}, w, a)
     end
 end
 
 # Copied from Julia base/io.jl
 function write{T,N,A<:Array}(w::Writer, a::SubArray{T,N,A})
     if !isbits(T) || stride(a,1)!=1
-        return invoke(write, (Any, AbstractArray), s, a)
+        return invoke(write, Tuple{Any,AbstractArray}, s, a)
     end
     colsz = size(a,1)*sizeof(T)
     if N<=1
@@ -314,7 +314,7 @@ function read!{T}(r::Reader, a::Array{T})
         end
         read!(r.buf, a)
     else
-        invoke(read!, (IO, Array), r, a)
+        invoke(read!, Tuple{IO,Array}, r, a)
     end
     a
 end
