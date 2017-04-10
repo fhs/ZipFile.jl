@@ -57,7 +57,7 @@ end
 function read(f::ReadableFile, ::Type{UInt8})
 	# This function needs to be fast because readbytes, readstring, etc.
 	# uses it. Avoid function calls when possible.
-	b = Array(UInt8, 1)
+	b = Vector{UInt8}(1)
 	read(f, b)
 	b[1]
 end
