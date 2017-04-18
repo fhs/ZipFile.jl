@@ -290,7 +290,7 @@ end
 
 function _getfiles(io::IO, diroffset::Integer, nfiles::Integer)
 	seek(io, diroffset)
-	files = Array(ReadableFile, nfiles)
+	files = Vector{ReadableFile}(nfiles)
 	for i in 1:nfiles
 		if readle(io, UInt32) != _CentralDirSig
 			error("invalid file header")
