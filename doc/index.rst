@@ -209,3 +209,8 @@ Writer the content of a into w.
 
 Writer the byte b in w.
 
+Function unzip
+--------------
+.. function:: unzip(inputfilename, [outputpath=pwd()])
+
+Unzips the contents of a zip archive inputfilename.

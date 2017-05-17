@@ -47,7 +47,7 @@ import Base: read, eof, write, close, mtime, position, show
 using Compat
 import Compat: unsafe_write
 
-export read, eof, write, close, mtime, position, show
+export read, eof, write, close, mtime, position, show, unzip
 
 if !isdefined(:read!)
     read! = read
@@ -538,6 +538,21 @@ end
 if !isdefined(Base, :unsafe_write)
 	unsafe_write(f::WritableFile, p::Ptr, nb::Integer) =
 		unsafe_write(f, convert(Ptr{UInt8}, p), convert(UInt, nb))
+end
+
+function unzip(inputfilename, outputpath=pwd())
+    r = Reader(inputfilename)
+    for f in r.files
+        outpath = joinpath(outputpath, f.name)
+        if isdirpath(outpath)
+            mkpath(outpath)
+        else
+            Base.open(outpath, "w") do io
+                write(io, readall(f))
+            end
+        end
+    end
+    nothing
 end
 
 end # module

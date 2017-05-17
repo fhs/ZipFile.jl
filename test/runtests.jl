@@ -135,6 +135,12 @@ for x in data
 end
 close(dir)
 
+const infile = joinpath(splitdir(@__FILE__)[1], "infozip.zip")
+const outpath = joinpath(tmp, "unpacked")
+mkpath(outpath)
+unzip(infile, outpath)
+@test isdir(joinpath(outpath, "ziptest"))
+@test isfile(joinpath(outpath, "ziptest", "hello.txt"))
 
 if !Debug
 	rm(tmp, recursive=true)
