@@ -246,6 +246,15 @@ function mtime(f::@compat Union{ReadableFile, WritableFile})
 	_mtime(f.dostime, f.dosdate)
 end
 
+"Load a little endian `UInt32` from a `UInt8` vector `b` starting from index `i`"
+function getindex_u32le(b::Vector{UInt8}, i)
+	b0 = UInt32(b[i])
+	b1 = UInt32(b[i + 1])
+	b2 = UInt32(b[i + 2])
+	b3 = UInt32(b[i + 3])
+	return (b3 << 24) | (b2 << 16) | (b1 << 8) | b0
+end
+
 function _find_enddiroffset(io::IO)
 	seekend(io)
 	filesize = position(io)
@@ -262,7 +271,7 @@ function _find_enddiroffset(io::IO)
 		seek(io, n)
 		b = read(io, UInt8, k)
 		for i in 1:k-3
-			if htol(reinterpret(UInt32, b[i:i+3]))[1] == _EndCentralDirSig
+			if getindex_u32le(b, i) == _EndCentralDirSig
 				offset = n+i-1
 				break
 			end
