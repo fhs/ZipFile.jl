@@ -64,11 +64,11 @@ const _EndCentralDirSig  = 0x06054b50
 const _ZipVersion = 20
 const Store = @compat UInt16(0)   # Compression method that does no compression
 const Deflate = @compat UInt16(8) # Deflate compression method
-const _Method2Str = @compat Dict{UInt16,Compat.UTF8String}(Store => "Store", Deflate => "Deflate")
+const _Method2Str = @compat Dict{UInt16,String}(Store => "Store", Deflate => "Deflate")
 
 type ReadableFile <: IO
 	_io :: IO
-	name :: Compat.UTF8String   # filename
+	name :: String   # filename
 	method :: UInt16            # compression method
 	dostime :: UInt16           # modification time in MS-DOS format
 	dosdate :: UInt16           # modification date in MS-DOS format
@@ -98,7 +98,7 @@ type Reader
 	_io :: IO
 	_close_io :: Bool
 	files :: Vector{ReadableFile} # ZIP file entries that can be read concurrently
-	comment :: Compat.UTF8String  # ZIP file comment
+	comment :: String  # ZIP file comment
 
 	function Reader(io::IO, close_io::Bool)
 		endoff = _find_enddiroffset(io)
@@ -122,7 +122,7 @@ end
 
 type WritableFile <: IO
 	_io :: IO
-	name :: Compat.UTF8String   # filename
+	name :: String   # filename
 	method :: UInt16            # compression method
 	dostime :: UInt16           # modification time in MS-DOS format
 	dosdate :: UInt16           # modification date in MS-DOS format

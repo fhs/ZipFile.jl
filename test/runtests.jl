@@ -93,8 +93,8 @@ write(f, s1)
 write(f, s2)
 close(dir)
 dir = ZipFile.Reader(filename)
-@test Compat.ASCIIString(read(dir.files[1], @compat(UInt8), length(s1))) == s1
-@test Compat.ASCIIString(read(dir.files[1], @compat(UInt8), length(s2))) == s2
+@test String(read(dir.files[1], @compat(UInt8), length(s1))) == s1
+@test String(read(dir.files[1], @compat(UInt8), length(s2))) == s2
 @test eof(dir.files[1])
 close(dir)
 
@@ -120,8 +120,8 @@ close(dir)
 dir = ZipFile.Reader(filename)
 @test_throws ErrorException write(dir.files[1], @compat(UInt8(20)))
 for x in data
-    if isa(x, Compat.ASCIIString)
-        @test x == Compat.ASCIIString(read(dir.files[1], @compat(UInt8), length(x)))
+    if isa(x, String)
+        @test x == String(read(dir.files[1], @compat(UInt8), length(x)))
     elseif isa(x, Array)
         y = similar(x)
         y[:] = 0
