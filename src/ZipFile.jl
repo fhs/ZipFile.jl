@@ -1,46 +1,40 @@
-# A Julia package for reading/writing ZIP archive files
-#
-# This package provides support for reading and writing ZIP archives in Julia.
-# Install it via the Julia package manager using ``Pkg.add("ZipFile")``.
-#
-# The ZIP file format is described in
-# http://www.pkware.com/documents/casestudies/APPNOTE.TXT
-#
-# Example
-# -------
-#
-# Write a new ZIP file::
-#
-# 	using ZipFile
-#
-# 	w = ZipFile.Writer("example.zip");
-# 	f = ZipFile.addfile(w, "hello.txt");
-# 	write(f, "hello world!\n");
-# 	f = ZipFile.addfile(w, "julia.txt", method=ZipFile.Deflate);
-# 	write(f, "Julia\n"^5);
-# 	close(w)
-#
-# Read and print out the contents of a ZIP file::
-#
-# 	r = ZipFile.Reader("example.zip");
-# 	for f in r.files
-# 		println("Filename: $(f.name)")
-# 		write(readstring(f));
-# 	end
-# 	close(r)
-#
-# Output::
-#
-# 	Filename: hello.txt
-# 	hello world!
-# 	Filename: julia.txt
-# 	Julia
-# 	Julia
-# 	Julia
-# 	Julia
-# 	Julia
-#
 isdefined(Base, :__precompile__) && __precompile__()
+
+"""
+A Julia package for reading/writing ZIP archive files
+
+This package provides support for reading and writing ZIP archives in Julia.
+Install it via the Julia package manager using ``Pkg.add("ZipFile")``.
+
+The ZIP file format is described in
+http://www.pkware.com/documents/casestudies/APPNOTE.TXT
+
+# Example
+The example below writes a new ZIP file and then reads back the contents.
+```
+julia> using ZipFile
+julia> w = ZipFile.Writer("/tmp/example.zip");
+julia> f = ZipFile.addfile(w, "hello.txt");
+julia> write(f, "hello world!\n");
+julia> f = ZipFile.addfile(w, "julia.txt", method=ZipFile.Deflate);
+julia> write(f, "Julia\n"^5);
+julia> close(w)
+julia> r = ZipFile.Reader("/tmp/example.zip");
+julia> for f in r.files
+          println("Filename: \$(f.name)")
+          write(STDOUT, readstring(f));
+       end
+julia> close(r)
+Filename: hello.txt
+hello world!
+Filename: julia.txt
+Julia
+Julia
+Julia
+Julia
+Julia
+```
+"""
 module ZipFile
 
 import Base: read, eof, write, close, mtime, position, show
@@ -62,8 +56,13 @@ const _LocalFileHdrSig   = 0x04034b50
 const _CentralDirSig     = 0x02014b50
 const _EndCentralDirSig  = 0x06054b50
 const _ZipVersion = 20
-const Store = @compat UInt16(0)   # Compression method that does no compression
-const Deflate = @compat UInt16(8) # Deflate compression method
+
+"Compression method that does no compression"
+const Store = @compat UInt16(0)
+
+"Deflate compression method"
+const Deflate = @compat UInt16(8)
+
 const _Method2Str = @compat Dict{UInt16,String}(Store => "Store", Deflate => "Deflate")
 
 type ReadableFile <: IO
@@ -94,6 +93,14 @@ type ReadableFile <: IO
 	end
 end
 
+"""
+Reader represents a ZIP file open for reading.
+
+	Reader(io::IO)
+	Reader(filename::AbstractString)
+
+Read a ZIP file from io or the file named filename.
+"""
 type Reader
 	_io :: IO
 	_close_io :: Bool
@@ -110,12 +117,10 @@ type Reader
 	end
 end
 
-# Read a ZIP file from io.
 function Reader(io::IO)
 	Reader(io, false)
 end
 
-# Read a ZIP file from the file named filename.
 function Reader(filename::AbstractString)
 	Reader(Base.open(filename), true)
 end
@@ -149,6 +154,14 @@ type WritableFile <: IO
 	end
 end
 
+"""
+Reader represents a ZIP file open for writing.
+
+	Writer(io::IO)
+	Writer(filename::AbstractString)
+
+Create a new ZIP file that will be written to io or the file named filename.
+"""
 type Writer
 	_io :: IO
 	_close_io :: Bool
@@ -163,12 +176,10 @@ type Writer
 	end
 end
 
-# Create a new ZIP file that will be written to io.
 function Writer(io::IO)
 	Writer(io, false)
 end
 
-# Create a new ZIP file that will be written to the file named filename.
 function Writer(filename::AbstractString)
 	Writer(Base.open(filename, "w"), true)
 end
@@ -466,11 +477,18 @@ function eof(f::ReadableFile)
 	f._pos >= f.uncompressedsize
 end
 
-# Add a new file named name into the ZIP file writer w, and return the
-# WritableFile for the new file. We don't allow concurrrent writes,
-# thus the file previously added using this function will be closed.
-# Method specifies the compression method that will be used, and mtime is the
-# modification time of the file.
+"""
+	addfile(w::Writer, name::AbstractString; method::Integer=Store, mtime::Float64=-1.0)
+
+Add a new file named name into the ZIP file writer w, and return the
+WritableFile for the new file. We don't allow concurrrent writes,
+thus the file previously added using this function will be closed.
+
+Method specifies the compression method that will be used (Store for
+uncompressed or Deflate for compressed).
+
+Mtime is the modification time of the file.
+"""
 function addfile(w::Writer, name::AbstractString; method::Integer=Store, mtime::Float64=-1.0)
 	if w._current !== nothing
 		close(w._current)
