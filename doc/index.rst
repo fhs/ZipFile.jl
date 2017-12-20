@@ -33,7 +33,7 @@ Read and print out the contents of a ZIP file::
 	r = ZipFile.Reader("example.zip");
 	for f in r.files
 		println("Filename: $(f.name)")
-		write(readstring(f));
+		write(STDOUT, readstring(f));
 	end
 	close(r)
 
