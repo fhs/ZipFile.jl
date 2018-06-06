@@ -1,4 +1,4 @@
-isdefined(Base, :__precompile__) && __precompile__()
+__precompile__()
 
 """
 A Julia package for reading/writing ZIP archive files
@@ -37,15 +37,11 @@ Julia
 """
 module ZipFile
 
-import Base: read, eof, write, close, mtime, position, show
+import Base: read, eof, write, close, mtime, position, show, unsafe_write
 using Compat
-import Compat: unsafe_write
+using Compat.Printf
 
 export read, eof, write, close, mtime, position, show
-
-if !isdefined(:read!)
-    read! = read
-end
 
 include("Zlib.jl")
 import .Zlib
@@ -58,14 +54,14 @@ const _EndCentralDirSig  = 0x06054b50
 const _ZipVersion = 20
 
 "Compression method that does no compression"
-const Store = @compat UInt16(0)
+const Store = UInt16(0)
 
 "Deflate compression method"
-const Deflate = @compat UInt16(8)
+const Deflate = UInt16(8)
 
-const _Method2Str = @compat Dict{UInt16,String}(Store => "Store", Deflate => "Deflate")
+const _Method2Str = Dict{UInt16,String}(Store => "Store", Deflate => "Deflate")
 
-type ReadableFile <: IO
+mutable struct ReadableFile <: IO
 	_io :: IO
 	name :: String   # filename
 	method :: UInt16            # compression method
@@ -101,7 +97,7 @@ Reader represents a ZIP file open for reading.
 
 Read a ZIP file from io or the file named filename.
 """
-type Reader
+mutable struct Reader
 	_io :: IO
 	_close_io :: Bool
 	files :: Vector{ReadableFile} # ZIP file entries that can be read concurrently
@@ -112,7 +108,7 @@ type Reader
 		diroff, nfiles, comment = _find_diroffset(io, endoff)
 		files = _getfiles(io, diroff, nfiles)
 		x = new(io, close_io, files, comment)
-		finalizer(x, close)
+		@compat finalizer(close, x)
 		x
 	end
 end
@@ -125,7 +121,7 @@ function Reader(filename::AbstractString)
 	Reader(Base.open(filename), true)
 end
 
-type WritableFile <: IO
+mutable struct WritableFile <: IO
 	_io :: IO
 	name :: String   # filename
 	method :: UInt16            # compression method
@@ -149,7 +145,7 @@ type WritableFile <: IO
 		end
 		f = new(io, name, method, dostime, dosdate, crc32,
 			compressedsize, uncompressedsize, _offset, _datapos, _zio, _closed)
-		finalizer(f, close)
+		@compat finalizer(close, f)
 		f
 	end
 end
@@ -162,16 +158,16 @@ Reader represents a ZIP file open for writing.
 
 Create a new ZIP file that will be written to io or the file named filename.
 """
-type Writer
+mutable struct Writer
 	_io :: IO
 	_close_io :: Bool
 	files :: Vector{WritableFile} # files (being) written
-	_current :: (@compat Union{WritableFile, Void})
+	_current :: Union{WritableFile, Nothing}
 	_closed :: Bool
 
 	function Writer(io::IO, close_io::Bool)
 		x = new(io, close_io, WritableFile[], nothing, false)
-		finalizer(x, close)
+		@compat finalizer(close, x)
 		x
 	end
 end
@@ -185,17 +181,17 @@ function Writer(filename::AbstractString)
 end
 
 # Print out a summary of f in a human-readable format.
-function show(io::IO, f::@compat Union{ReadableFile, WritableFile})
+function show(io::IO, f::Union{ReadableFile, WritableFile})
 	print(io, "$(string(typeof(f)))(name=$(f.name), method=$(_Method2Str[f.method]), uncompresssedsize=$(f.uncompressedsize), compressedsize=$(f.compressedsize), mtime=$(mtime(f)))")
 end
 
 # Print out a summary of rw in a human-readable format.
-function show(io::IO, rw::@compat Union{Reader, Writer})
+function show(io::IO, rw::Union{Reader, Writer})
 	println(io, "$(string(typeof(rw))) for $(rw._io) containing $(length(rw.files)) files:\n")
 	@printf(io, "%16s %-7s %-16s %s\n", "uncompressedsize", "method", "mtime", "name")
 	println(io, "-"^(16+1+7+1+16+1+4))
 	for f in rw.files
-		ftime = @compat Libc.strftime("%Y-%m-%d %H-%M", mtime(f))
+		ftime = Libc.strftime("%Y-%m-%d %H-%M", mtime(f))
 		@printf(io, "%16d %-7s %-16s %s\n",
 			f.uncompressedsize, _Method2Str[f.method], ftime, f.name)
 
@@ -226,8 +222,8 @@ function _writele(io::IO, x::Vector{UInt8})
 	n
 end
 
-_writele(io::IO, x::UInt16) = _writele(io, reinterpret(UInt8, [htol(x)]))
-_writele(io::IO, x::UInt32) = _writele(io, reinterpret(UInt8, [htol(x)]))
+_writele(io::IO, x::UInt16) = _writele(io, Vector{UInt8}(reinterpret(UInt8, [htol(x)])))
+_writele(io::IO, x::UInt32) = _writele(io, Vector{UInt8}(reinterpret(UInt8, [htol(x)])))
 
 # For MS-DOS time/date format, see:
 # http://msdn.microsoft.com/en-us/library/ms724247(v=VS.85).aspx
@@ -235,9 +231,9 @@ _writele(io::IO, x::UInt32) = _writele(io, reinterpret(UInt8, [htol(x)]))
 # Convert seconds since epoch to MS-DOS time/date, which has
 # a resolution of 2 seconds.
 function _msdostime(secs::Float64)
-	t = @compat Libc.TmStruct(secs)
-	dostime = @compat UInt16((t.hour<<11) | (t.min<<5) | div(t.sec, 2))
-	dosdate = @compat UInt16(((t.year+1900-1980)<<9) | ((t.month+1)<<5) | t.mday)
+	t = Libc.TmStruct(secs)
+	dostime = UInt16((t.hour<<11) | (t.min<<5) | div(t.sec, 2))
+	dosdate = UInt16(((t.year+1900-1980)<<9) | ((t.month+1)<<5) | t.mday)
 	dostime, dosdate
 end
 
@@ -249,11 +245,11 @@ function _mtime(dostime::UInt16, dosdate::UInt16)
 	mday = dosdate & 0x1f
 	month = ((dosdate>>5) & 0xf) - 1
 	year = (dosdate>>9) + 1980 - 1900
-	time(@compat Libc.TmStruct(sec, min, hour, mday, month, year, 0, 0, -1))
+	time(Libc.TmStruct(sec, min, hour, mday, month, year, 0, 0, -1))
 end
 
 # Returns the modification time of f as seconds since epoch.
-function mtime(f::@compat Union{ReadableFile, WritableFile})
+function mtime(f::Union{ReadableFile, WritableFile})
 	_mtime(f.dostime, f.dosdate)
 end
 
@@ -280,7 +276,7 @@ function _find_enddiroffset(io::IO)
 		k = min(filesize, guess)
 		n = filesize-k
 		seek(io, n)
-		b = read(io, UInt8, k)
+		b = read!(io, Array{UInt8}(Compat.undef, k))
 		for i in 1:k-3
 			if getindex_u32le(b, i) == _EndCentralDirSig
 				offset = n+i-1
@@ -304,13 +300,13 @@ function _find_diroffset(io::IO, enddiroffset::Integer)
 	skip(io, 4)
 	offset = readle(io, UInt32)
 	commentlen = readle(io, UInt16)
-	comment = utf8_validate(read(io, UInt8, commentlen))
+	comment = utf8_validate(read!(io, Array{UInt8}(Compat.undef, commentlen)))
 	offset, nfiles, comment
 end
 
 function _getfiles(io::IO, diroffset::Integer, nfiles::Integer)
 	seek(io, diroffset)
-	files = Vector{ReadableFile}(nfiles)
+	files = Vector{ReadableFile}(Compat.undef, nfiles)
 	for i in 1:nfiles
 		if readle(io, UInt32) != _CentralDirSig
 			error("invalid file header")
@@ -331,7 +327,7 @@ function _getfiles(io::IO, diroffset::Integer, nfiles::Integer)
 		commentlen = readle(io, UInt16)
 		skip(io, 2+2+4)
 		offset = readle(io, UInt32)
-		name = utf8_validate(read(io, UInt8, namelen))
+		name = utf8_validate(read!(io, Array{UInt8}(Compat.undef, namelen)))
 		skip(io, extralen+commentlen)
 		files[i] = ReadableFile(io, name, method, dostime, dosdate,
 			crc32, compsize, uncompsize, offset)
@@ -365,37 +361,37 @@ function close(w::Writer)
 
 	# write central directory record
 	for f in w.files
-		_writele(w._io, @compat UInt32(_CentralDirSig))
-		_writele(w._io, @compat UInt16(_ZipVersion))
-		_writele(w._io, @compat UInt16(_ZipVersion))
-		_writele(w._io, @compat UInt16(0))
-		_writele(w._io, @compat UInt16(f.method))
-		_writele(w._io, @compat UInt16(f.dostime))
-		_writele(w._io, @compat UInt16(f.dosdate))
-		_writele(w._io, @compat UInt32(f.crc32))
-		_writele(w._io, @compat UInt32(f.compressedsize))
-		_writele(w._io, @compat UInt32(f.uncompressedsize))
-		b = convert(Vector{UInt8}, f.name)
-		_writele(w._io, @compat UInt16(length(b)))
-		_writele(w._io, @compat UInt16(0))
-		_writele(w._io, @compat UInt16(0))
-		_writele(w._io, @compat UInt16(0))
-		_writele(w._io, @compat UInt16(0))
-		_writele(w._io, @compat UInt32(0))
-		_writele(w._io, @compat UInt32(f._offset))
+		_writele(w._io, UInt32(_CentralDirSig))
+		_writele(w._io, UInt16(_ZipVersion))
+		_writele(w._io, UInt16(_ZipVersion))
+		_writele(w._io, UInt16(0))
+		_writele(w._io, UInt16(f.method))
+		_writele(w._io, UInt16(f.dostime))
+		_writele(w._io, UInt16(f.dosdate))
+		_writele(w._io, UInt32(f.crc32))
+		_writele(w._io, UInt32(f.compressedsize))
+		_writele(w._io, UInt32(f.uncompressedsize))
+		b = Vector{UInt8}(Compat.codeunits(f.name))
+		_writele(w._io, UInt16(length(b)))
+		_writele(w._io, UInt16(0))
+		_writele(w._io, UInt16(0))
+		_writele(w._io, UInt16(0))
+		_writele(w._io, UInt16(0))
+		_writele(w._io, UInt32(0))
+		_writele(w._io, UInt32(f._offset))
 		_writele(w._io, b)
 		cdsize += 46+length(b)
 	end
 
 	# write end of central directory
-	_writele(w._io, @compat UInt32(_EndCentralDirSig))
-	_writele(w._io, @compat UInt16(0))
-	_writele(w._io, @compat UInt16(0))
-	_writele(w._io, @compat UInt16(length(w.files)))
-	_writele(w._io, @compat UInt16(length(w.files)))
-	_writele(w._io, @compat UInt32(cdsize))
-	_writele(w._io, @compat UInt32(cdpos))
-	_writele(w._io, @compat UInt16(0))
+	_writele(w._io, UInt32(_EndCentralDirSig))
+	_writele(w._io, UInt16(0))
+	_writele(w._io, UInt16(0))
+	_writele(w._io, UInt16(length(w.files)))
+	_writele(w._io, UInt16(length(w.files)))
+	_writele(w._io, UInt32(cdsize))
+	_writele(w._io, UInt32(cdpos))
+	_writele(w._io, UInt16(0))
 
 	if w._close_io
 		close(w._io)
@@ -416,9 +412,9 @@ function close(f::WritableFile)
 
 	# fill in local file header fillers
 	seek(f._io, f._offset+14)	# seek to CRC-32
-	_writele(f._io, @compat UInt32(f.crc32))
-	_writele(f._io, @compat UInt32(f.compressedsize))
-	_writele(f._io, @compat UInt32(f.uncompressedsize))
+	_writele(f._io, UInt32(f.crc32))
+	_writele(f._io, UInt32(f.compressedsize))
+	_writele(f._io, UInt32(f.uncompressedsize))
 	seekend(f._io)
 end
 
@@ -428,9 +424,9 @@ function close(f::ReadableFile)
 end
 
 # Read data into a. Throws EOFError if a cannot be filled in completely.
-function read{T}(f::ReadableFile, a::Array{T})
+function read(f::ReadableFile, a::Array{T}) where T
 	if !isbits(T)
-		return @compat invoke(read, Tuple{IO,Array}, s, a)
+		return invoke(read, Tuple{IO,Array}, f, a)
 	end
 
 	if f._datapos < 0
@@ -455,7 +451,7 @@ function read{T}(f::ReadableFile, a::Array{T})
 	end
 
 	seek(f._io, f._datapos+f._zpos)
-	b = reinterpret(UInt8, reshape(a, length(a)))
+	b = Array{UInt8}(Compat.undef, sizeof(a))
 	read!(f._zio, b)
 	f._zpos = position(f._io) - f._datapos
 	f._pos += length(b)
@@ -469,7 +465,8 @@ function read{T}(f::ReadableFile, a::Array{T})
 			error("crc32 do not match")
 		end
 	end
-	a
+
+	reinterpret(T, b)
 end
 
 # Returns true if and only if we have reached the end of file f.
@@ -499,23 +496,23 @@ function addfile(w::Writer, name::AbstractString; method::Integer=Store, mtime::
 		mtime = time()
 	end
 	dostime, dosdate = _msdostime(mtime)
-	f = WritableFile(w._io, name, @compat(UInt16(method)), dostime, dosdate,
-		@compat(UInt32(0)), @compat(UInt32(0)), @compat(UInt32(0)), @compat(UInt32(position(w._io))),
-		@compat(Int64(-1)), w._io, false)
+	f = WritableFile(w._io, name, UInt16(method), dostime, dosdate,
+        UInt32(0), UInt32(0), UInt32(0), UInt32(position(w._io)),
+        Int64(-1), w._io, false)
 
 	# Write local file header. Missing entries will be filled in later.
-	_writele(w._io, @compat UInt32(_LocalFileHdrSig))
-	_writele(w._io, @compat UInt16(_ZipVersion))
-	_writele(w._io, @compat UInt16(0))
-	_writele(w._io, @compat UInt16(f.method))
-	_writele(w._io, @compat UInt16(f.dostime))
-	_writele(w._io, @compat UInt16(f.dosdate))
-	_writele(w._io, @compat UInt32(f.crc32))	# filler
-	_writele(w._io, @compat UInt32(f.compressedsize))	# filler
-	_writele(w._io, @compat UInt32(f.uncompressedsize))	# filler
-	b = convert(Vector{UInt8}, f.name)
-	_writele(w._io, @compat UInt16(length(b)))
-	_writele(w._io, @compat UInt16(0))
+	_writele(w._io, UInt32(_LocalFileHdrSig))
+	_writele(w._io, UInt16(_ZipVersion))
+	_writele(w._io, UInt16(0))
+	_writele(w._io, UInt16(f.method))
+	_writele(w._io, UInt16(f.dostime))
+	_writele(w._io, UInt16(f.dosdate))
+	_writele(w._io, UInt32(f.crc32))	# filler
+	_writele(w._io, UInt32(f.compressedsize))	# filler
+	_writele(w._io, UInt32(f.uncompressedsize))	# filler
+	b = Vector{UInt8}(Compat.codeunits(f.name))
+	_writele(w._io, UInt16(length(b)))
+	_writele(w._io, UInt16(0))
 	_writele(w._io, b)
 
 	f._datapos = position(w._io)
@@ -552,10 +549,6 @@ function unsafe_write(f::WritableFile, p::Ptr{UInt8}, nb::UInt)
 	f.crc32 = Zlib.crc32(unsafe_wrap(Array, p, nb), f.crc32)
 	f.uncompressedsize += n
 	n
-end
-if !isdefined(Base, :unsafe_write)
-	unsafe_write(f::WritableFile, p::Ptr, nb::Integer) =
-		unsafe_write(f, convert(Ptr{UInt8}, p), convert(UInt, nb))
 end
 
 end # module
