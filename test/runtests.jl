@@ -1,5 +1,5 @@
-using Base.Test
 using Compat
+using Compat.Test
 using ZipFile
 
 Debug = false
@@ -14,7 +14,7 @@ function findfile(dir, name)
 end
 
 function fileequals(f, s)
-	readstring(f) == s
+	read(f, String) == s
 end
 
 
@@ -61,12 +61,12 @@ zipdata = [
 	("empty2.txt", "", ZipFile.Deflate),
 ]
 # 2013-08-16	9:42:24
-modtime = time(@compat(Libc.TmStruct(24, 42, 9, 16, 7, 2013-1900, 0, 0, -1)))
+modtime = time(Libc.TmStruct(24, 42, 9, 16, 7, 2013-1900, 0, 0, -1))
 
 dir = ZipFile.Writer("$tmp/hello.zip")
 @test length(string(dir)) > 0
 for (name, data, meth) in zipdata
-	f = ZipFile.addfile(dir, name; method=meth, mtime=modtime)
+	local f = ZipFile.addfile(dir, name; method=meth, mtime=modtime)
 	@test length(string(f)) > 0
 	write(f, data)
 end
@@ -75,7 +75,7 @@ close(dir)
 dir = ZipFile.Reader("$tmp/hello.zip")
 @test length(string(dir)) > 0
 for (name, data, meth) in zipdata
-	f = findfile(dir, name)
+	local f = findfile(dir, name)
 	@test length(string(f)) > 0
 	@test f.method == meth
 	@test abs(mtime(f) - modtime) < 2
@@ -93,39 +93,39 @@ write(f, s1)
 write(f, s2)
 close(dir)
 dir = ZipFile.Reader(filename)
-@test String(read(dir.files[1], @compat(UInt8), length(s1))) == s1
-@test String(read(dir.files[1], @compat(UInt8), length(s2))) == s2
+@test String(read!(dir.files[1], Array{UInt8}(Compat.undef, length(s1)))) == s1
+@test String(read!(dir.files[1], Array{UInt8}(Compat.undef, length(s2)))) == s2
 @test eof(dir.files[1])
 close(dir)
 
 
 data = Any[
-    @compat(UInt8(20)),
-    @compat(Int(42)),
+    UInt8(20),
+    Int(42),
     float(3.14),
     "julia",
     rand(5),
     rand(3, 4),
-    Compat.view(rand(10,10), 2:8,2:4),
+    view(rand(10,10), 2:8,2:4),
 ]
 filename = "$tmp/multi2.zip"
 dir = ZipFile.Writer(filename)
 f = ZipFile.addfile(dir, "data"; method=ZipFile.Deflate)
-@test_throws ErrorException read(f, @compat(UInt8), 1)
+@test_throws ErrorException read!(f, Array{UInt8}(Compat.undef, 1))
 for x in data
     write(f, x)
 end
 close(dir)
 
 dir = ZipFile.Reader(filename)
-@test_throws ErrorException write(dir.files[1], @compat(UInt8(20)))
+@test_throws ErrorException write(dir.files[1], UInt8(20))
 for x in data
     if isa(x, String)
-        @test x == String(read(dir.files[1], @compat(UInt8), length(x)))
+        @test x == String(read!(dir.files[1], Array{UInt8}(Compat.undef, length(x))))
     elseif isa(x, Array)
         y = similar(x)
-        y[:] = 0
-        @test x == read(dir.files[1], y)
+        y[:] .= 0
+        @test x == read!(dir.files[1], y)
         @test x == y
     elseif isa(x, SubArray)
         continue # Base knows how to write, but not read
