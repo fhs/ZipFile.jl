@@ -1,4 +1,4 @@
-__precompile__()
+VERSION < v"0.7.0-beta2.199" && __precompile__()
 
 """
 A Julia package for reading/writing ZIP archive files
@@ -22,7 +22,7 @@ julia> close(w)
 julia> r = ZipFile.Reader("/tmp/example.zip");
 julia> for f in r.files
           println("Filename: \$(f.name)")
-          write(STDOUT, readstring(f));
+          write(stdout, readstring(f));
        end
 julia> close(r)
 Filename: hello.txt
