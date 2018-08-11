@@ -425,7 +425,7 @@ end
 
 # Read data into a. Throws EOFError if a cannot be filled in completely.
 function read(f::ReadableFile, a::Array{T}) where T
-    if !isbits(T)
+    if !isbitstype(T)
         return invoke(read, Tuple{IO,Array}, f, a)
     end
 
