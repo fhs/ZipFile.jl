@@ -1,5 +1,4 @@
-using Compat
-using Compat.Test
+using Test
 using ZipFile
 
 Debug = false
@@ -93,8 +92,8 @@ write(f, s1)
 write(f, s2)
 close(dir)
 dir = ZipFile.Reader(filename)
-@test String(read!(dir.files[1], Array{UInt8}(Compat.undef, length(s1)))) == s1
-@test String(read!(dir.files[1], Array{UInt8}(Compat.undef, length(s2)))) == s2
+@test String(read!(dir.files[1], Array{UInt8}(undef, length(s1)))) == s1
+@test String(read!(dir.files[1], Array{UInt8}(undef, length(s2)))) == s2
 @test eof(dir.files[1])
 close(dir)
 
@@ -111,7 +110,7 @@ data = Any[
 filename = "$tmp/multi2.zip"
 dir = ZipFile.Writer(filename)
 f = ZipFile.addfile(dir, "data"; method=ZipFile.Deflate)
-@test_throws ErrorException read!(f, Array{UInt8}(Compat.undef, 1))
+@test_throws ErrorException read!(f, Array{UInt8}(undef, 1))
 for x in data
     write(f, x)
 end
@@ -121,7 +120,7 @@ dir = ZipFile.Reader(filename)
 @test_throws ErrorException write(dir.files[1], UInt8(20))
 for x in data
     if isa(x, String)
-        @test x == String(read!(dir.files[1], Array{UInt8}(Compat.undef, length(x))))
+        @test x == String(read!(dir.files[1], Array{UInt8}(undef, length(x))))
     elseif isa(x, Array)
         y = similar(x)
         y[:] .= 0
