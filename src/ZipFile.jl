@@ -1,5 +1,3 @@
-VERSION < v"0.7.0-beta2.199" && __precompile__()
-
 """
 A Julia package for reading/writing ZIP archive files
 
@@ -38,8 +36,7 @@ Julia
 module ZipFile
 
 import Base: read, eof, write, close, mtime, position, show, unsafe_write
-using Compat
-using Compat.Printf
+using Printf
 
 export read, eof, write, close, mtime, position, show
 
@@ -108,7 +105,7 @@ mutable struct Reader
         diroff, nfiles, comment = _find_diroffset(io, endoff)
         files = _getfiles(io, diroff, nfiles)
         x = new(io, close_io, files, comment)
-        @compat finalizer(close, x)
+        finalizer(close, x)
         x
     end
 end
@@ -145,7 +142,7 @@ mutable struct WritableFile <: IO
         end
         f = new(io, name, method, dostime, dosdate, crc32,
             compressedsize, uncompressedsize, _offset, _datapos, _zio, _closed)
-        @compat finalizer(close, f)
+        finalizer(close, f)
         f
     end
 end
@@ -167,7 +164,7 @@ mutable struct Writer
 
     function Writer(io::IO, close_io::Bool)
         x = new(io, close_io, WritableFile[], nothing, false)
-        @compat finalizer(close, x)
+        finalizer(close, x)
         x
     end
 end
@@ -276,7 +273,7 @@ function _find_enddiroffset(io::IO)
         k = min(filesize, guess)
         n = filesize-k
         seek(io, n)
-        b = read!(io, Array{UInt8}(Compat.undef, k))
+        b = read!(io, Array{UInt8}(undef, k))
         for i in 1:k-3
             if getindex_u32le(b, i) == _EndCentralDirSig
                 offset = n+i-1
@@ -300,13 +297,13 @@ function _find_diroffset(io::IO, enddiroffset::Integer)
     skip(io, 4)
     offset = readle(io, UInt32)
     commentlen = readle(io, UInt16)
-    comment = utf8_validate(read!(io, Array{UInt8}(Compat.undef, commentlen)))
+    comment = utf8_validate(read!(io, Array{UInt8}(undef, commentlen)))
     offset, nfiles, comment
 end
 
 function _getfiles(io::IO, diroffset::Integer, nfiles::Integer)
     seek(io, diroffset)
-    files = Vector{ReadableFile}(Compat.undef, nfiles)
+    files = Vector{ReadableFile}(undef, nfiles)
     for i in 1:nfiles
         if readle(io, UInt32) != _CentralDirSig
             error("invalid file header")
@@ -327,7 +324,7 @@ function _getfiles(io::IO, diroffset::Integer, nfiles::Integer)
         commentlen = readle(io, UInt16)
         skip(io, 2+2+4)
         offset = readle(io, UInt32)
-        name = utf8_validate(read!(io, Array{UInt8}(Compat.undef, namelen)))
+        name = utf8_validate(read!(io, Array{UInt8}(undef, namelen)))
         skip(io, extralen+commentlen)
         files[i] = ReadableFile(io, name, method, dostime, dosdate,
             crc32, compsize, uncompsize, offset)
@@ -371,7 +368,7 @@ function close(w::Writer)
         _writele(w._io, UInt32(f.crc32))
         _writele(w._io, UInt32(f.compressedsize))
         _writele(w._io, UInt32(f.uncompressedsize))
-        b = Vector{UInt8}(Compat.codeunits(f.name))
+        b = Vector{UInt8}(codeunits(f.name))
         _writele(w._io, UInt16(length(b)))
         _writele(w._io, UInt16(0))
         _writele(w._io, UInt16(0))
@@ -426,7 +423,9 @@ end
 # Read data into a. Throws EOFError if a cannot be filled in completely.
 function read(f::ReadableFile, a::Array{T}) where T
     if !isbitstype(T)
-        return invoke(read, Tuple{IO,Array}, f, a)
+        # may need to wrap in invoke() if this package is refactored to overload read!
+        # return invoke(read!, Tuple{IO,Array}, f, a)
+        return read!(f, a)
     end
 
     if f._datapos < 0
@@ -451,7 +450,7 @@ function read(f::ReadableFile, a::Array{T}) where T
     end
 
     seek(f._io, f._datapos+f._zpos)
-    b = Array{UInt8}(Compat.undef, sizeof(a))
+    b = Array{UInt8}(undef, sizeof(a))
     read!(f._zio, b)
     f._zpos = position(f._io) - f._datapos
     f._pos += length(b)
@@ -510,7 +509,7 @@ function addfile(w::Writer, name::AbstractString; method::Integer=Store, mtime::
     _writele(w._io, UInt32(f.crc32))    # filler
     _writele(w._io, UInt32(f.compressedsize))   # filler
     _writele(w._io, UInt32(f.uncompressedsize)) # filler
-    b = Vector{UInt8}(Compat.codeunits(f.name))
+    b = Vector{UInt8}(codeunits(f.name))
     _writele(w._io, UInt16(length(b)))
     _writele(w._io, UInt16(0))
     _writele(w._io, b)

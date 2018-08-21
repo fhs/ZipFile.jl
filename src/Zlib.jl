@@ -1,7 +1,7 @@
 # This file was copied from https://github.com/dcjones/Zlib.jl
 #
 # Zlib is licensed under the MIT License:
-# 
+#
 # > Copyright (c) 2013: Daniel C. Jones
 # >
 # > Permission is hereby granted, free of charge, to any person obtaining
@@ -25,8 +25,6 @@
 
 module Zlib
 
-using Compat
-
 import Base: read, read!, readuntil, readbytes!, write, close, eof
 
 export compress, decompress, crc32
@@ -49,7 +47,7 @@ const Z_MEM_ERROR     = -4
 const Z_BUF_ERROR     = -5
 const Z_VERSION_ERROR = -6
 
-if Compat.Sys.iswindows()
+if Sys.iswindows()
     const libz = "zlib1"
 else
     const libz = "libz"
@@ -66,11 +64,11 @@ mutable struct z_stream
     total_out::Culong
 
     msg::Ptr{UInt8}
-    state::Ptr{Compat.Cvoid}
+    state::Ptr{Cvoid}
 
-    zalloc::Ptr{Compat.Cvoid}
-    zfree::Ptr{Compat.Cvoid}
-    opaque::Ptr{Compat.Cvoid}
+    zalloc::Ptr{Cvoid}
+    zfree::Ptr{Cvoid}
+    opaque::Ptr{Cvoid}
 
     data_type::Cint
     adler::Culong
@@ -106,7 +104,7 @@ mutable struct Writer <: IO
     closed::Bool
 
     Writer(strm::z_stream, io::IO, closed::Bool) =
-        (w = new(strm, io, closed); @compat(finalizer(close, w)); w)
+        (w = new(strm, io, closed); finalizer(close, w); w)
 end
 
 function Writer(io::IO, level::Integer, raw::Bool=false)
@@ -131,7 +129,7 @@ Writer(io::IO, raw::Bool=false) = Writer(io, 9, raw)
 function write(w::Writer, p::Ptr, nb::Integer)
     w.strm.next_in = p
     w.strm.avail_in = nb
-    outbuf = Vector{UInt8}(Compat.undef, 1024)
+    outbuf = Vector{UInt8}(undef, 1024)
 
     while true
         w.strm.avail_out = length(outbuf)
@@ -203,10 +201,10 @@ function close(w::Writer)
     w.closed = true
 
     # flush zlib buffer using Z_FINISH
-    inbuf = Vector{UInt8}(Compat.undef, 0)
+    inbuf = Vector{UInt8}(undef, 0)
     w.strm.next_in = pointer(inbuf)
     w.strm.avail_in = 0
-    outbuf = Vector{UInt8}(Compat.undef, 1024)
+    outbuf = Vector{UInt8}(undef, 1024)
     ret = Z_OK
     while ret != Z_STREAM_END
         w.strm.avail_out = length(outbuf)
@@ -239,7 +237,7 @@ mutable struct Reader <: IO
     stream_end::Bool
 
     Reader(strm::z_stream, io::IO, buf::IOBuffer, closed::Bool, bufsize::Int) =
-        (r = new(strm, io, buf, closed, bufsize, false); @compat(finalizer(close, r)); r)
+        (r = new(strm, io, buf, closed, bufsize, false); finalizer(close, r); r)
 end
 
 function Reader(io::IO, raw::Bool=false; bufsize::Int=4096)
@@ -258,11 +256,11 @@ end
 # unless we have already reached EOF.
 function fillbuf(r::Reader, minlen::Integer)
     ret = Z_OK
-    while Compat.bytesavailable(r.buf) < minlen && !eof(r.io) && ret != Z_STREAM_END
-        input = read!(r.io, Array{UInt8}(Compat.undef, min(Compat.bytesavailable(r.io), r.bufsize)))
+    while bytesavailable(r.buf) < minlen && !eof(r.io) && ret != Z_STREAM_END
+        input = read!(r.io, Array{UInt8}(undef, min(bytesavailable(r.io), r.bufsize)))
         r.strm.next_in = pointer(input)
         r.strm.avail_in = length(input)
-        #outbuf = Vector{UInt8}(Compat.undef, r.bufsize)
+        #outbuf = Vector{UInt8}(undef, r.bufsize)
 
         while true
             #r.strm.next_out = outbuf
@@ -293,7 +291,7 @@ function fillbuf(r::Reader, minlen::Integer)
         r.stream_end = true
     end
 
-    Compat.bytesavailable(r.buf)
+    bytesavailable(r.buf)
 end
 
 # This is to fix the ambiguity with Base.read!
@@ -321,7 +319,7 @@ end
 
 # This function needs to be fast because other read calls use it.
 function read(r::Reader, ::Type{UInt8})
-    if Compat.bytesavailable(r.buf) < 1 && fillbuf(r, 1) < 1
+    if bytesavailable(r.buf) < 1 && fillbuf(r, 1) < 1
         throw(EOFError())
     end
     read(r.buf, UInt8)
@@ -335,17 +333,17 @@ readbytes!(r::Reader, b::AbstractArray{UInt8}, nb=length(b)) =
 function readuntil(r::Reader, delim::UInt8)
     nb = readuntil(r.buf, delim)
     while nb == 0
-        offset = Compat.bytesavailable(r.buf)
+        offset = bytesavailable(r.buf)
         fillbuf(r, offset+r.bufsize)
-        if Compat.bytesavailable(r.buf) == nb
+        if bytesavailable(r.buf) == nb
             break
         end
         # TODO: add offset here when https://github.com/JuliaLang/julia/pull/4485
         # is merged
         nb = readuntil(r.buf, delim) #, offset)
     end
-    if nb == 0;  nb == Compat.bytesavailable(r.buf); end
-    read!(r.buf, Vector{UInt8}(Compat.undef, nb))
+    if nb == 0;  nb == bytesavailable(r.buf); end
+    read!(r.buf, Vector{UInt8}(undef, nb))
 end
 
 function close(r::Reader)
@@ -366,7 +364,7 @@ function eof(r::Reader)
     # yield no uncompressed data. So, make sure we can get at least
     # one more byte of decompressed data before we say we haven't
     # reached EOF yet.
-    Compat.bytesavailable(r.buf) == 0 && eof(r.io)
+    bytesavailable(r.buf) == 0 && eof(r.io)
 end
 
 function crc32(data::Vector{UInt8}, crc::Integer=0)
