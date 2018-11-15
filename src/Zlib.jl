@@ -47,10 +47,10 @@ const Z_MEM_ERROR     = -4
 const Z_BUF_ERROR     = -5
 const Z_VERSION_ERROR = -6
 
-if Sys.iswindows()
-    const libz = "zlib1"
-else
-    const libz = "libz"
+include(joinpath("..", "deps", "deps.jl"))
+
+function __init__()
+    check_deps()
 end
 
 # The zlib z_stream structure.
