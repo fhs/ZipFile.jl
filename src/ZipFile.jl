@@ -35,10 +35,10 @@ Julia
 """
 module ZipFile
 
-import Base: read, eof, write, close, mtime, position, show, unsafe_write
+import Base: read, read!, eof, write, close, mtime, position, show, unsafe_write
 using Printf
 
-export read, eof, write, close, mtime, position, show
+export read, read!, eof, write, close, mtime, position, show
 
 include("Zlib.jl")
 import .Zlib
@@ -421,13 +421,12 @@ function close(f::ReadableFile)
 end
 
 # Read data into a. Throws EOFError if a cannot be filled in completely.
-function read(f::ReadableFile, a::Array{T}) where T
-    if !isbitstype(T)
-        # may need to wrap in invoke() if this package is refactored to overload read!
-        # return invoke(read!, Tuple{IO,Array}, f, a)
-        return read!(f, a)
-    end
+read(f::ReadableFile, a::Array{T}) where T = read!(f, Array{T}(undef, size(a)))
 
+read!(f::ReadableFile, a::Array{UInt8}) = _read(f, a)
+read!(f::ReadableFile, a::Array{T}) where T = _read(f, a)
+
+function _read(f::ReadableFile, a::Array{T}) where T
     if f._datapos < 0
         seek(f._io, f._offset)
         if readle(f._io, UInt32) != _LocalFileHdrSig
@@ -450,7 +449,7 @@ function read(f::ReadableFile, a::Array{T}) where T
     end
 
     seek(f._io, f._datapos+f._zpos)
-    b = Array{UInt8}(undef, sizeof(a))
+    b = unsafe_wrap(Array{UInt8, 1}, reinterpret(Ptr{UInt8}, pointer(a)), sizeof(a))
     read!(f._zio, b)
     f._zpos = position(f._io) - f._datapos
     f._pos += length(b)
@@ -465,7 +464,7 @@ function read(f::ReadableFile, a::Array{T}) where T
         end
     end
 
-    reinterpret(T, b)
+    return a
 end
 
 # Returns true if and only if we have reached the end of file f.
