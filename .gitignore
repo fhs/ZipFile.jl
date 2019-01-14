@@ -1,2 +1,4 @@
 doc/_build/
 deps/deps.jl
+build.log
+deps/usr/*
