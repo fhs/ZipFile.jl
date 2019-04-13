@@ -295,7 +295,7 @@ function fillbuf(r::Reader, minlen::Integer)
 end
 
 # This is to fix the ambiguity with Base.read!
-function read!(r::Reader, a::Vector{UInt8})
+function read!(r::Reader, a::Array{UInt8, N}) where N
     nb = length(a)
     if fillbuf(r, nb) < nb
         throw(EOFError())
