@@ -3,6 +3,8 @@ using ZipFile
 
 Debug = false
 
+@test Any[] == detect_ambiguities(Base, Core, ZipFile)
+
 function findfile(dir, name)
     for f in dir.files
         if f.name == name
