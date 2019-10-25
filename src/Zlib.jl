@@ -24,6 +24,7 @@
 # > WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 module Zlib
+using Zlib_jll
 
 import Base: read, read!, readuntil, readbytes!, write, close, eof
 
@@ -47,11 +48,6 @@ const Z_MEM_ERROR     = -4
 const Z_BUF_ERROR     = -5
 const Z_VERSION_ERROR = -6
 
-include(joinpath("..", "deps", "deps.jl"))
-
-function __init__()
-    check_deps()
-end
 
 # The zlib z_stream structure.
 mutable struct z_stream
