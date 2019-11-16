@@ -35,7 +35,7 @@ Julia
 """
 module ZipFile
 
-import Base: read, read!, eof, write, close, mtime, position, show, unsafe_write
+import Base: read, read!, eof, write, flush, close, mtime, position, show, unsafe_write
 using Printf
 
 export read, read!, eof, write, close, mtime, position, show
@@ -347,7 +347,14 @@ function close(w::Writer)
         return
     end
     w._closed = true
+    flush(w)
+    if w._close_io
+        close(w._io)
+    end
+end
 
+# Write central directory record and flush underlying IO instance.
+function flush(w::Writer)
     if w._current !== nothing
         close(w._current)
         w._current = nothing
@@ -390,9 +397,10 @@ function close(w::Writer)
     _writele(w._io, UInt32(cdpos))
     _writele(w._io, UInt16(0))
 
-    if w._close_io
-        close(w._io)
-    end
+    flush(w._io)
+    seek(w._io, cdpos)
+
+    return
 end
 
 # Flush the file f into the ZIP file.
@@ -408,11 +416,12 @@ function close(f::WritableFile)
     f.compressedsize = position(f)
 
     # fill in local file header fillers
+    pos = position(f._io)
     seek(f._io, f._offset+14)   # seek to CRC-32
     _writele(f._io, UInt32(f.crc32))
     _writele(f._io, UInt32(f.compressedsize))
     _writele(f._io, UInt32(f.uncompressedsize))
-    seekend(f._io)
+    seek(f._io, pos)
 end
 
 # A no-op provided for completeness.
