@@ -398,6 +398,9 @@ function flush(w::Writer)
     _writele(w._io, UInt16(0))
 
     flush(w._io)
+
+    # Seek to the beginning of central directory so that appending
+    # more files will overwrite it.
     seek(w._io, cdpos)
 
     return
@@ -421,6 +424,13 @@ function close(f::WritableFile)
     _writele(f._io, UInt32(f.crc32))
     _writele(f._io, UInt32(f.compressedsize))
     _writele(f._io, UInt32(f.uncompressedsize))
+
+    # Seek to the end of file `f`.  Note that we can't use
+    # `seekend(f._io)` because the end position of the physical zip
+    # file can be larger than the position `pos` of the end of the
+    # file `f` if `flush(::Writer)` has been called before and the
+    # size of this file `f` is smaller than the central directory
+    # record.
     seek(f._io, pos)
 end
 
