@@ -136,6 +136,23 @@ for x in data
 end
 close(dir)
 
+filename = "$tmp/flush.zip"
+dir = ZipFile.Writer(filename)
+f = ZipFile.addfile(dir, "1")
+write(f, "data-1")
+flush(dir)
+r = ZipFile.Reader(filename)
+@test read(r.files[1], String) == "data-1"
+close(r)
+f = ZipFile.addfile(dir, "2")
+write(f, "data-2")
+flush(dir)
+r = ZipFile.Reader(filename)
+@test read(r.files[1], String) == "data-1"
+@test read(r.files[2], String) == "data-2"
+close(r)
+close(dir)
+
 
 if !Debug
     rm(tmp, recursive=true)
