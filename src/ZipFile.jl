@@ -20,7 +20,7 @@ julia> close(w)
 julia> r = ZipFile.Reader("/tmp/example.zip");
 julia> for f in r.files
           println("Filename: \$(f.name)")
-          write(stdout, readstring(f));
+          write(stdout, read(f, String));
        end
 julia> close(r)
 Filename: hello.txt
