@@ -274,7 +274,7 @@ function _find_enddiroffset(io::IO)
         n = filesize-k
         seek(io, n)
         b = read!(io, Array{UInt8}(undef, k))
-        for i in 1:k-3
+        for i in k-3:-1:1
             if getindex_u32le(b, i) == _EndCentralDirSig
                 offset = n+i-1
                 break

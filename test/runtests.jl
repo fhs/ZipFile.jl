@@ -19,8 +19,8 @@ function fileequals(f, s)
 end
 
 # test a zip file that contains multiple copies of the EOCD hex signature
-# This test will fail
-@test_broken ZipFile.Reader(joinpath(dirname(@__FILE__),"EOCD.zip"))
+dir = ZipFile.Reader(joinpath(dirname(@__FILE__),"EOCD.zip"))
+@test length(dir.files) == 1
 
 # test a zip file created using Info-Zip
 dir = ZipFile.Reader(joinpath(dirname(@__FILE__), "infozip.zip"))
