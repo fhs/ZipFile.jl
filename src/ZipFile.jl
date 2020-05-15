@@ -491,7 +491,7 @@ function read(f::ReadableFile, ::Type{UInt8})
     byte
 end
 
-function unsafe_read(f::ReadableFile, p::Ptr{UInt8}, n::UInt)
+function Base.unsafe_read(f::ReadableFile, p::Ptr{UInt8}, n::UInt)
     ensure_zio!(f)
     seek(f._io, f._datapos+f._zpos)
     b = unsafe_wrap(Array{UInt8, 1}, p, n)
