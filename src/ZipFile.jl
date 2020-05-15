@@ -439,40 +439,31 @@ function close(f::ReadableFile)
     nothing
 end
 
-# Read data into a. Throws EOFError if a cannot be filled in completely.
-read(f::ReadableFile, a::Array{T}) where T = read!(f, Array{T}(undef, size(a)))
+"create underlying Zlib reader if doesn't exist"
+function ensure_zio!(f::ReadableFile)
+    f._datapos >= 0 && return
 
-read!(f::ReadableFile, a::Array{UInt8}) = _read(f, a)
-read!(f::ReadableFile, a::Array{T}) where T = _read(f, a)
-
-function _read(f::ReadableFile, a::Array{T}) where T
-    if f._datapos < 0
-        seek(f._io, f._offset)
-        if readle(f._io, UInt32) != _LocalFileHdrSig
-            error("invalid file header")
-        end
-        skip(f._io, 2+2+2+2+2+4+4+4)
-        filelen = readle(f._io, UInt16)
-        extralen = readle(f._io, UInt16)
-        skip(f._io, filelen+extralen)
-        if f.method == Deflate
-            f._zio = Zlib.Reader(f._io, true)
-        elseif f.method == Store
-            f._zio = f._io
-        end
-        f._datapos = position(f._io)
+    seek(f._io, f._offset)
+    if readle(f._io, UInt32) != _LocalFileHdrSig
+        error("invalid file header")
     end
-
-    if eof(f) || f._pos+length(a)*sizeof(T) > f.uncompressedsize
-        throw(EOFError())
+    skip(f._io, 2+2+2+2+2+4+4+4)
+    filelen = readle(f._io, UInt16)
+    extralen = readle(f._io, UInt16)
+    skip(f._io, filelen+extralen)
+    if f.method == Deflate
+        f._zio = Zlib.Reader(f._io, true)
+    elseif f.method == Store
+        f._zio = f._io
     end
+    f._datapos = position(f._io)
+end
 
-    seek(f._io, f._datapos+f._zpos)
-    b = unsafe_wrap(Array{UInt8, 1}, reinterpret(Ptr{UInt8}, pointer(a)), sizeof(a))
-    read!(f._zio, b)
+"advance io position state and crc32 checksum, checking it at eof"
+function update_reader!(f::ReadableFile, data::Array{UInt8})
     f._zpos = position(f._io) - f._datapos
-    f._pos += length(b)
-    f._currentcrc32 = Zlib.crc32(b, f._currentcrc32)
+    f._pos += length(data)
+    f._currentcrc32 = Zlib.crc32(data, f._currentcrc32)
 
     if eof(f)
         if f.method == Deflate
@@ -482,6 +473,44 @@ function _read(f::ReadableFile, a::Array{T}) where T
             error("crc32 do not match")
         end
     end
+end
+update_reader!(f::ReadableFile, data::UInt8) = update_reader!(f, [data])
+
+
+# Read data into a. Throws EOFError if a cannot be filled in completely.
+read(f::ReadableFile, a::Array{T}) where T = read!(f, Array{T}(undef, size(a)))
+
+read!(f::ReadableFile, a::Array{UInt8}) = _read(f, a)
+read!(f::ReadableFile, a::Array{T}) where T = _read(f, a)
+
+function read(f::ReadableFile, ::Type{UInt8})
+    ensure_zio!(f)
+    seek(f._io, f._datapos+f._zpos)
+    byte = read(f._zio, UInt8)
+    update_reader!(f, byte)
+    byte
+end
+
+function unsafe_read(f::ReadableFile, p::Ptr{UInt8}, n::UInt)
+    ensure_zio!(f)
+    seek(f._io, f._datapos+f._zpos)
+    b = unsafe_wrap(Array{UInt8, 1}, p, n)
+    read!(f._zio, b)
+    update_reader!(f, b)
+    nothing
+end
+
+function _read(f::ReadableFile, a::Array{T}) where T
+    ensure_zio!(f)
+
+    if eof(f) || f._pos+length(a)*sizeof(T) > f.uncompressedsize
+        throw(EOFError())
+    end
+
+    seek(f._io, f._datapos+f._zpos)
+    b = unsafe_wrap(Array{UInt8, 1}, reinterpret(Ptr{UInt8}, pointer(a)), sizeof(a))
+    read!(f._zio, b)
+    update_reader!(f, b)
 
     return a
 end
