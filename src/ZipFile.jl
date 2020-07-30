@@ -500,6 +500,18 @@ function Base.unsafe_read(f::ReadableFile, p::Ptr{UInt8}, n::UInt)
     nothing
 end
 
+function read(f::ReadableFile, nb::Integer=typemax(Int))
+    ensure_zio!(f)
+
+    nb = min(nb, f.uncompressedsize - f._pos)
+    b = Vector{UInt8}(undef, nb)
+    seek(f._io, f._datapos+f._zpos)
+    read!(f._zio, b)
+    update_reader!(f, b)
+
+    return b
+end
+
 function _read(f::ReadableFile, a::Array{T}) where T
     ensure_zio!(f)
 
