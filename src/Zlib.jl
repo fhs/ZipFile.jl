@@ -127,7 +127,7 @@ function write(w::Writer, p::Ptr, nb::Integer)
     w.strm.avail_in = nb
     outbuf = Vector{UInt8}(undef, 1024)
 
-    while true
+    GC.@preserve outbuf while true
         w.strm.avail_out = length(outbuf)
         w.strm.next_out = pointer(outbuf)
 
@@ -146,16 +146,20 @@ function write(w::Writer, p::Ptr, nb::Integer)
             break
         end
     end
+    w.strm.next_in = C_NULL
+    w.strm.next_out = C_NULL
     nb
 end
 
-write(w::Writer, a::Array{UInt8}) = write(w, pointer(a), length(a))
+function write(w::Writer, a::Array{UInt8})
+    GC.@preserve a write(w, pointer(a), length(a))
+end
 
 # If this is not provided, Base.IO write methods will write
 # arrays one element at a time.
 function write(w::Writer, a::Array{T}) where T
     if isbits(T)
-        write(w, pointer(a), length(a)*sizeof(T))
+        GC.@preserve a write(w, pointer(a), length(a)*sizeof(T))
     else
         invoke(write, Tuple{IO,Array}, w, a)
     end
@@ -168,20 +172,11 @@ function write(w::Writer, a::SubArray{T,N,A}) where {T,N,A<:Array}
     end
     colsz = size(a,1)*sizeof(T)
     if N<=1
-        return write(s, pointer(a, 1), colsz)
+        return GC.@preserve a write(s, pointer(a, 1), colsz)
     else
-        # WARNING: cartesianmap(f,dims) is deprecated, use for idx = CartesianRange(dims)
-        #     f(idx.I...)
-
-        if VERSION >= v"0.4.0-"
-            for idx in CartesianRange(tuple(1, size(a)[2:end]...))
-                write(w, pointer(a, idx.I), colsz)
-            end
-        else
-            cartesianmap((idxs...)->write(w, pointer(a, idxs), colsz),
-                        tuple(1, size(a)[2:end]...))
+        for idx in CartesianRange(tuple(1, size(a)[2:end]...))
+            GC.@preserve a write(w, pointer(a, idx.I), colsz)
         end
-
         return colsz*Base.trailingsize(a,2)
     end
 end
@@ -197,30 +192,34 @@ function close(w::Writer)
     w.closed = true
 
     # flush zlib buffer using Z_FINISH
-    inbuf = Vector{UInt8}(undef, 0)
-    w.strm.next_in = pointer(inbuf)
-    w.strm.avail_in = 0
+    inbuf = Ref{UInt8}(0)
     outbuf = Vector{UInt8}(undef, 1024)
-    ret = Z_OK
-    while ret != Z_STREAM_END
-        w.strm.avail_out = length(outbuf)
-        w.strm.next_out = pointer(outbuf)
-        ret = ccall((:deflate, libz),
-                    Int32, (Ptr{z_stream}, Int32),
-                    Ref(w.strm), Z_FINISH)
-        if ret != Z_OK && ret != Z_STREAM_END
-            error("Error in zlib deflate stream ($(ret)).")
+    GC.@preserve inbuf outbuf begin
+        w.strm.next_in = Base.unsafe_convert(Ptr{UInt8}, inbuf)
+        w.strm.avail_in = 0
+        ret = Z_OK
+        while ret != Z_STREAM_END
+            w.strm.avail_out = length(outbuf)
+            w.strm.next_out = pointer(outbuf)
+            ret = ccall((:deflate, libz),
+                        Int32, (Ptr{z_stream}, Int32),
+                        Ref(w.strm), Z_FINISH)
+            if ret != Z_OK && ret != Z_STREAM_END
+                error("Error in zlib deflate stream ($(ret)).")
+            end
+            n = length(outbuf) - w.strm.avail_out
+            if n > 0 && write(w.io, outbuf[1:n]) != n
+                error("short write")
+            end
         end
-        n = length(outbuf) - w.strm.avail_out
-        if n > 0 && write(w.io, outbuf[1:n]) != n
-            error("short write")
-        end
-    end
 
-    ret = ccall((:deflateEnd, libz), Int32, (Ptr{z_stream},), Ref(w.strm))
-    if ret == Z_STREAM_ERROR
-        error("Error: zlib deflate stream was prematurely freed.")
+        ret = ccall((:deflateEnd, libz), Int32, (Ptr{z_stream},), Ref(w.strm))
+        if ret == Z_STREAM_ERROR
+            error("Error: zlib deflate stream was prematurely freed.")
+        end
     end
+    w.strm.next_in = C_NULL
+    w.strm.next_out = C_NULL
 end
 
 
@@ -258,7 +257,8 @@ function fillbuf(r::Reader, minlen::Integer)
         r.strm.avail_in = length(input)
         #outbuf = Vector{UInt8}(undef, r.bufsize)
 
-        while true
+        r_buf = r.buf # GC.@preserve only accepts symbols
+        GC.@preserve input r_buf while true
             #r.strm.next_out = outbuf
             #r.strm.avail_out = length(outbuf)
             (r.strm.next_out, r.strm.avail_out) = Base.alloc_request(r.buf, convert(UInt, r.bufsize))
@@ -282,6 +282,8 @@ function fillbuf(r::Reader, minlen::Integer)
             end
         end
     end
+    r.strm.next_in = C_NULL
+    r.strm.next_out = C_NULL
 
     if ret == Z_STREAM_END
         r.stream_end = true
