@@ -521,8 +521,10 @@ function _read(f::ReadableFile, a::Array{T}) where T
 
     seek(f._io, f._datapos+f._zpos)
     b = unsafe_wrap(Array{UInt8, 1}, reinterpret(Ptr{UInt8}, pointer(a)), sizeof(a))
-    read!(f._zio, b)
-    update_reader!(f, b)
+    GC.@preserve a begin
+        read!(f._zio, b)
+        update_reader!(f, b)
+    end
 
     return a
 end
