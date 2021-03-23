@@ -100,6 +100,11 @@ dir = ZipFile.Reader(filename)
 @test String(read!(dir.files[1], Array{UInt8}(undef, length(s1)))) == s1
 @test String(read!(dir.files[1], Array{UInt8}(undef, length(s2)))) == s2
 @test eof(dir.files[1])
+@test_throws ArgumentError seek(dir.files[1], 1)
+# Can seek back to start
+seek(dir.files[1], 0)
+# Test readavailable()
+@test String(readavailable(dir.files[1])) == s1*s2
 close(dir)
 
 

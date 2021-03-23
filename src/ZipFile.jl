@@ -594,6 +594,20 @@ function position(f::ReadableFile)
     f._pos
 end
 
+function Base.seek(io::ReadableFile, n::Integer)
+    # It's not possible to seek the compressed stream without an extra
+    # compression index, so only support seeking to the start.
+    n == 0 || throw(ArgumentError("Cannot efficiently seek zip stream to nonzero offset $n"))
+    io._datapos = -1
+    io._currentcrc32 = 0
+    io._pos = 0
+    io._zpos = 0
+    return io
+end
+
+# Needed for use as `src` in `write(dst::IO, src::IO)`.
+Base.readavailable(io::ZipFile.ReadableFile) = read(io)
+
 # Write nb elements located at p into f.
 function unsafe_write(f::WritableFile, p::Ptr{UInt8}, nb::UInt)
     # zlib doesn't like 0 length writes
