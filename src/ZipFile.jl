@@ -58,6 +58,9 @@ const Deflate = UInt16(8)
 
 const _Method2Str = Dict{UInt16,String}(Store => "Store", Deflate => "Deflate")
 
+"Unicode filename flag"
+const _UnicodeFlag = 0x800
+
 mutable struct ReadableFile <: IO
     _io :: IO
     name :: String   # filename
@@ -368,7 +371,7 @@ function flush(w::Writer)
         _writele(w._io, UInt32(_CentralDirSig))
         _writele(w._io, UInt16(_ZipVersion))
         _writele(w._io, UInt16(_ZipVersion))
-        _writele(w._io, UInt16(0))
+        _writele(w._io, UInt16(_UnicodeFlag))
         _writele(w._io, UInt16(f.method))
         _writele(w._io, UInt16(f.dostime))
         _writele(w._io, UInt16(f.dosdate))
@@ -563,7 +566,7 @@ function addfile(w::Writer, name::AbstractString; method::Integer=Store, mtime::
     # Write local file header. Missing entries will be filled in later.
     _writele(w._io, UInt32(_LocalFileHdrSig))
     _writele(w._io, UInt16(_ZipVersion))
-    _writele(w._io, UInt16(0))
+    _writele(w._io, UInt16(_UnicodeFlag))
     _writele(w._io, UInt16(f.method))
     _writele(w._io, UInt16(f.dostime))
     _writele(w._io, UInt16(f.dosdate))
