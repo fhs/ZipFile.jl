@@ -148,7 +148,7 @@ mutable struct WritableFile <: IO
 end
 
 """
-Reader represents a ZIP file open for writing.
+Writer represents a ZIP file open for writing.
 
     Writer(io::IO)
     Writer(filename::AbstractString)
