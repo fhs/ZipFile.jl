@@ -43,6 +43,22 @@ f = findfile(dir, "ziptest/julia.txt")
 
 close(dir)
 
+# test zip64 files
+# Archives are taken from here: https://go.dev/src/archive/zip/reader_test.go
+dir = ZipFile.Reader(joinpath(dirname(@__FILE__), "zip64.zip"))
+@test length(dir.files) == 1
+f = findfile(dir, "README")
+@test f.uncompressedsize == 36
+@test fileequals(f, "This small file is in ZIP64 format.\n")
+close(dir)
+
+# a variant of the above file with different Extra fields
+dir = ZipFile.Reader(joinpath(dirname(@__FILE__), "zip64-2.zip"))
+@test length(dir.files) == 1
+f = findfile(dir, "README")
+@test f.uncompressedsize == 36
+@test fileequals(f, "This small file is in ZIP64 format.\n")
+close(dir)
 
 tmp = mktempdir()
 if Debug
