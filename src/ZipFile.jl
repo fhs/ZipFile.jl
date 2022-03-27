@@ -77,15 +77,15 @@ mutable struct ReadableFile <: IO
     _pos :: Int64       # current position in uncompressed data
     _zpos :: Int64      # current position in compressed data
 
-	function ReadableFile(io::IO, name::AbstractString, method::UInt16, dostime::UInt16,
-		dosdate::UInt16, crc32::UInt32, compressedsize::Unsigned,
-		uncompressedsize::Unsigned, _offset::Unsigned)
-		if method != Store && method != Deflate
-			error("unknown compression method $method")
-		end
-		new(io, name, method, dostime, dosdate, crc32,
-		    compressedsize, uncompressedsize, _offset, -1, io, 0, 0, 0)
-	end
+    function ReadableFile(io::IO, name::AbstractString, method::UInt16, dostime::UInt16,
+        dosdate::UInt16, crc32::UInt32, compressedsize::Unsigned,
+        uncompressedsize::Unsigned, _offset::Unsigned)
+        if method != Store && method != Deflate
+            error("unknown compression method $method")
+        end
+        new(io, name, method, dostime, dosdate, crc32,
+            compressedsize, uncompressedsize, _offset, -1, io, 0, 0, 0)
+    end
 end
 
 """
@@ -313,22 +313,22 @@ function _find_zip64_diroffset(io::IO, enddiroffset::Integer)
 	offset, nfiles
 end
 function _find_diroffset(io::IO, enddiroffset::Integer)
-	seek(io, enddiroffset)
-	if readle(io, UInt32) != _EndCentralDirSig
-		error("internal error")
-	end
-	skip(io, 2+2+2)
-	nfiles = read(io, UInt16)
-	skip(io, 4)
-	offset = readle(io, UInt32)
-	commentlen = readle(io, UInt16)
+    seek(io, enddiroffset)
+    if readle(io, UInt32) != _EndCentralDirSig
+        error("internal error")
+    end
+    skip(io, 2+2+2)
+    nfiles = read(io, UInt16)
+    skip(io, 4)
+    offset = readle(io, UInt32)
+    commentlen = readle(io, UInt16)
     comment = utf8_validate(read!(io, Array{UInt8}(undef, commentlen)))
-	if nfiles == 0xFFFF || offset == 0xFFFFFFFF
-		dirloc = _find_zip64_enddirlocoffset(io)
-		z64enddiroffset = _find_zip64_enddiroffset(io::IO, dirloc)
-		offset, nfiles = _find_zip64_diroffset(io, z64enddiroffset)
-	end
-	offset, nfiles, comment
+    if nfiles == 0xFFFF || offset == 0xFFFFFFFF
+        dirloc = _find_zip64_enddirlocoffset(io)
+        z64enddiroffset = _find_zip64_enddiroffset(io::IO, dirloc)
+        offset, nfiles = _find_zip64_diroffset(io, z64enddiroffset)
+    end
+    offset, nfiles, comment
 end
 
 
@@ -602,7 +602,6 @@ function addfile(w::Writer, name::AbstractString; method::Integer=Store, mtime::
         close(w._current)
         w._current = nothing
     end
-
 
     if mtime < 0
         mtime = time()
