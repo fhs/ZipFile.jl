@@ -78,8 +78,8 @@ mutable struct ReadableFile <: IO
     _zpos :: Int64      # current position in compressed data
 
     function ReadableFile(io::IO, name::AbstractString, method::UInt16, dostime::UInt16,
-        dosdate::UInt16, crc32::UInt32, compressedsize::Unsigned,
-        uncompressedsize::Unsigned, _offset::Unsigned)
+            dosdate::UInt16, crc32::UInt32, compressedsize::Unsigned,
+            uncompressedsize::Unsigned, _offset::Unsigned)
         if method != Store && method != Deflate
             error("unknown compression method $method")
         end
