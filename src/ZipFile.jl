@@ -515,7 +515,7 @@ function update_reader!(f::ReadableFile, data::Array{UInt8})
     f._zpos = position(f._io) - f._datapos
     datalen = length(data)
     f._pos += datalen
-    chunk_size = 2^31 #
+    chunk_size = if Sys.WORD_SIZE > 32 2^31 else datalen end 
     start = 1
     while datalen > 0
         f._currentcrc32 = Zlib.crc32(view(data, start:start-1+min(datalen, chunk_size)), f._currentcrc32)
