@@ -513,8 +513,15 @@ end
 "advance io position state and crc32 checksum, checking it at eof"
 function update_reader!(f::ReadableFile, data::Array{UInt8})
     f._zpos = position(f._io) - f._datapos
-    f._pos += length(data)
-    f._currentcrc32 = Zlib.crc32(data, f._currentcrc32)
+    datalen = length(data)
+    f._pos += datalen
+    chunk_size = 2^31 #
+    start = 1
+    while datalen > 0
+        f._currentcrc32 = Zlib.crc32(view(data, start:start-1+min(datalen, chunk_size)), f._currentcrc32)
+        datalen -= chunk_size
+        start += chunk_size
+    end
 
     if eof(f)
         if f.method == Deflate
