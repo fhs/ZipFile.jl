@@ -7,3 +7,7 @@ This module provides support for reading and writing ZIP archives in Julia.
 ## Installation
 
 Install via the Julia package manager, `Pkg.add("ZipFile")`.
+
+## Documentation
+
+Documentation is [available on JuliaHub](https://docs.juliahub.com/ZipFile/cOum2/0.10.0/).
