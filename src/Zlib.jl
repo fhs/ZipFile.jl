@@ -365,12 +365,12 @@ function eof(r::Reader)
     bytesavailable(r.buf) == 0 && eof(r.io)
 end
 
-function crc32(data::Vector{UInt8}, crc::Integer=0)
+function crc32(data::AbstractArray{UInt8}, crc::Integer=0)
     convert(UInt32, (ccall((:crc32, libz),
                  Culong, (Culong, Ptr{UInt8}, Cuint),
                  crc, data, length(data))))
 end
 
-crc32(data::AbstractString, crc::Integer=0) = crc32(convert(Vector{UInt8}, data), crc)
+crc32(data::AbstractString, crc::Integer=0) = crc32(convert(AbstractArray{UInt8}, data), crc)
 
 end # module
