@@ -32,6 +32,16 @@ Julia
 Julia
 Julia
 ```
+
+# Example 
+Adding files based on directory structure where `foo` is the directory you have want to zip
+```
+julia> w = ZipFile.Writer("/tmp/example.zip");
+julia> ZipFile.addfile(w, "foo/c.txt");
+julia> ZipFile.addfile(w, "foo/bar/a.txt");
+julia> ZipFile.addfile(w, "foo/bar/b.txt");
+julia> close(w)
+```
 """
 module ZipFile
 
