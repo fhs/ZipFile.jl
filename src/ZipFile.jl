@@ -13,6 +13,7 @@ The example below writes a new ZIP file and then reads back the contents.
 julia> using ZipFile
 julia> w = ZipFile.Writer("/tmp/example.zip");
 julia> f = ZipFile.addfile(w, "hello.txt");
+julia> ZipFile.addfile(w, "foo/bar/a.txt"); # Adds a file a.txt in foo/bar directory
 julia> write(f, "hello world!\n");
 julia> f = ZipFile.addfile(w, "julia.txt", method=ZipFile.Deflate);
 julia> write(f, "Julia\n"^5);
