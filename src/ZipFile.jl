@@ -128,17 +128,17 @@ mutable struct WritableFile <: IO
     dostime :: UInt16           # modification time in MS-DOS format
     dosdate :: UInt16           # modification date in MS-DOS format
     crc32 :: UInt32             # CRC32 of uncompressed data
-    compressedsize :: UInt32    # file size after compression
-    uncompressedsize :: UInt32  # size of uncompressed file
-    _offset :: UInt32
+    compressedsize :: UInt64    # file size after compression
+    uncompressedsize :: UInt64  # size of uncompressed file
+    _offset :: UInt64
     _datapos :: Int64   # position where data begins
     _zio :: IO          # compression IO
 
     _closed :: Bool
 
     function WritableFile(io::IO, name::AbstractString, method::UInt16, dostime::UInt16,
-            dosdate::UInt16, crc32::UInt32, compressedsize::UInt32,
-            uncompressedsize::UInt32, _offset::UInt32, _datapos::Int64,
+            dosdate::UInt16, crc32::UInt32, compressedsize::UInt64,
+            uncompressedsize::UInt64, _offset::UInt64, _datapos::Int64,
             _zio::IO, _closed::Bool)
         if method != Store && method != Deflate
             error("unknown compression method $method")
@@ -225,6 +225,7 @@ end
 
 _writele(io::IO, x::UInt16) = _writele(io, Vector{UInt8}(reinterpret(UInt8, [htol(x)])))
 _writele(io::IO, x::UInt32) = _writele(io, Vector{UInt8}(reinterpret(UInt8, [htol(x)])))
+_writele(io::IO, x::UInt64) = _writele(io, Vector{UInt8}(reinterpret(UInt8, [htol(x)])))
 
 # For MS-DOS time/date format, see:
 # http://msdn.microsoft.com/en-us/library/ms724247(v=VS.85).aspx
@@ -425,8 +426,8 @@ function flush(w::Writer)
         _writele(w._io, UInt16(f.dostime))
         _writele(w._io, UInt16(f.dosdate))
         _writele(w._io, UInt32(f.crc32))
-        _writele(w._io, UInt32(f.compressedsize))
-        _writele(w._io, UInt32(f.uncompressedsize))
+        _writele(w._io, UInt64(f.compressedsize))
+        _writele(w._io, UInt64(f.uncompressedsize))
         b = Vector{UInt8}(codeunits(f.name))
         _writele(w._io, UInt16(length(b)))
         _writele(w._io, UInt16(0))
@@ -434,7 +435,7 @@ function flush(w::Writer)
         _writele(w._io, UInt16(0))
         _writele(w._io, UInt16(0))
         _writele(w._io, UInt32(0))
-        _writele(w._io, UInt32(f._offset))
+        _writele(w._io, UInt64(f._offset))
         _writele(w._io, b)
         cdsize += 46+length(b)
     end
@@ -474,8 +475,8 @@ function close(f::WritableFile)
     pos = position(f._io)
     seek(f._io, f._offset+14)   # seek to CRC-32
     _writele(f._io, UInt32(f.crc32))
-    _writele(f._io, UInt32(f.compressedsize))
-    _writele(f._io, UInt32(f.uncompressedsize))
+    _writele(f._io, UInt64(f.compressedsize))
+    _writele(f._io, UInt64(f.uncompressedsize))
 
     # Seek to the end of file `f`.  Note that we can't use
     # `seekend(f._io)` because the end position of the physical zip
@@ -616,7 +617,7 @@ function addfile(w::Writer, name::AbstractString; method::Integer=Store, mtime::
     end
     dostime, dosdate = _msdostime(mtime)
     f = WritableFile(w._io, name, UInt16(method), dostime, dosdate,
-        UInt32(0), UInt32(0), UInt32(0), UInt32(position(w._io)),
+        UInt32(0), UInt64(0), UInt64(0), UInt64(position(w._io)),
         Int64(-1), w._io, false)
 
     # Write local file header. Missing entries will be filled in later.
@@ -627,8 +628,8 @@ function addfile(w::Writer, name::AbstractString; method::Integer=Store, mtime::
     _writele(w._io, UInt16(f.dostime))
     _writele(w._io, UInt16(f.dosdate))
     _writele(w._io, UInt32(f.crc32))    # filler
-    _writele(w._io, UInt32(f.compressedsize))   # filler
-    _writele(w._io, UInt32(f.uncompressedsize)) # filler
+    _writele(w._io, UInt64(f.compressedsize))   # filler
+    _writele(w._io, UInt64(f.uncompressedsize)) # filler
     b = Vector{UInt8}(codeunits(f.name))
     _writele(w._io, UInt16(length(b)))
     _writele(w._io, UInt16(0))
