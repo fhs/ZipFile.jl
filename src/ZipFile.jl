@@ -36,7 +36,7 @@ Julia
 """
 module ZipFile
 
-import Base: read, read!, eof, write, flush, close, mtime, position, show, unsafe_write
+import Base: read, read!, eof, write, flush, close, mtime, position, show, unsafe_write, Sys
 using Printf
 
 export read, read!, eof, write, close, mtime, position, show
@@ -60,6 +60,15 @@ const Store = UInt16(0)
 const Deflate = UInt16(8)
 
 const _Method2Str = Dict{UInt16,String}(Store => "Store", Deflate => "Deflate")
+
+"Unicode filename flag"
+const _UnicodeFlag = 0x800
+
+"Version made by"
+const _VersionMadeBy = (Sys.iswindows() ? 0x0a00 : 0x0300) | _ZipVersion
+
+"Default external file attributes: -rw-r-----"
+const _DefaultExtFileAttr = Sys.iswindows() ? 0 : (UInt32(0o640) << 16)
 
 mutable struct ReadableFile <: IO
     _io :: IO
@@ -418,9 +427,9 @@ function flush(w::Writer)
     # write central directory record
     for f in w.files
         _writele(w._io, UInt32(_CentralDirSig))
+        _writele(w._io, UInt16(_VersionMadeBy))
         _writele(w._io, UInt16(_ZipVersion))
-        _writele(w._io, UInt16(_ZipVersion))
-        _writele(w._io, UInt16(0))
+        _writele(w._io, UInt16(_UnicodeFlag))
         _writele(w._io, UInt16(f.method))
         _writele(w._io, UInt16(f.dostime))
         _writele(w._io, UInt16(f.dosdate))
@@ -433,7 +442,7 @@ function flush(w::Writer)
         _writele(w._io, UInt16(0))
         _writele(w._io, UInt16(0))
         _writele(w._io, UInt16(0))
-        _writele(w._io, UInt32(0))
+        _writele(w._io, UInt32(_DefaultExtFileAttr))
         _writele(w._io, UInt32(f._offset))
         _writele(w._io, b)
         cdsize += 46+length(b)
@@ -622,7 +631,7 @@ function addfile(w::Writer, name::AbstractString; method::Integer=Store, mtime::
     # Write local file header. Missing entries will be filled in later.
     _writele(w._io, UInt32(_LocalFileHdrSig))
     _writele(w._io, UInt16(_ZipVersion))
-    _writele(w._io, UInt16(0))
+    _writele(w._io, UInt16(_UnicodeFlag))
     _writele(w._io, UInt16(f.method))
     _writele(w._io, UInt16(f.dostime))
     _writele(w._io, UInt16(f.dosdate))
