@@ -286,7 +286,7 @@ function _find_sigoffset(io::IO, sig::UInt32)
         end
     end
     if offset === nothing
-        error("failed to find end of centeral directory record")
+        error("failed to find end of central directory record")
     end
     offset
 end
