@@ -91,7 +91,7 @@ unzippers = [
     unzip_python,
 ]
 
-@testset "compat with $(unzipper)" for unzipper in unzippers
+@testset "Writer compat with $(unzipper)" for unzipper in unzippers
     for zippath in readdir(tmp; join=true)
         mktempdir() do tmpout
             # Unzip into an output directory
