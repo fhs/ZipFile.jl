@@ -47,13 +47,12 @@ end
 
 # This is modified to only check for `unzip` from 
 # https://github.com/samoconnor/InfoZIP.jl/blob/1247b24dd3183e00baa7890c1a2c7f6766c3d774/src/InfoZIP.jl#L6-L14
-have_infozip() = try
-    occursin(r"^UnZip.*by Info-ZIP", read(`unzip -h`, String))
-catch ex
-    if ex isa Base.IOError
+function have_infozip()
+    try
+        occursin(r"^UnZip.*by Info-ZIP", read(`unzip`, String))
+    catch
         return false
     end
-    rethrow(ex)
 end
 
 """
