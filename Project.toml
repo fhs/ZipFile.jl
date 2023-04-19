@@ -9,10 +9,13 @@ Zlib_jll = "83775a58-1f1d-513f-b197-d71354ab007a"
 
 [compat]
 Zlib_jll = "1.2.11"
-julia = "1.3.0"
+julia = "1.6.0"
 
 [extras]
+LibArchive_jll = "1e303b3e-d4db-56ce-88c4-91e52606a1a8"
+PyCall = "438e738f-606a-5dbb-bf0a-cddfbfd45ab0"
 Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
+p7zip_jll = "3f19e933-33d8-53b3-aaab-bd5110c3b7a0"
 
 [targets]
-test = ["Test"]
+test = ["LibArchive_jll", "PyCall", "Test", "p7zip_jll"]
