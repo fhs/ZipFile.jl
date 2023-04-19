@@ -38,9 +38,10 @@ Use zipfile.py from python standard library
 """
 function unzip_python(zippath, dirpath)
     zipfile = PyCall.pyimport("zipfile")
-    f = zipfile.ZipFile(zippath)
-    isnothing(f.testzip()) || error(string(f.testzip()))
-    f.extractall(dirpath)
+    PyCall.@pywith zipfile.ZipFile(zippath) as f begin
+        isnothing(f.testzip()) || error(string(f.testzip()))
+        f.extractall(dirpath)
+    end
     nothing
 end
 

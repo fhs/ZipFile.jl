@@ -203,6 +203,7 @@ include("external_unzippers.jl")
                 length(files)
             end
             @test length(dir.files) == total_files
+            close(dir)
         end
     end
 end
