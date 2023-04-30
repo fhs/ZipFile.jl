@@ -98,11 +98,24 @@ dir = ZipFile.Reader("$tmp/hello.zip")
 for (name, data, meth) in zipdata
     local f = findfile(dir, name)
     @test length(string(f)) > 0
+    # These are the default os and external file attributes.
+    @test f.os == ZipFile.UNIX
+    @test f.externalattrs == UInt32(UInt32(0o0100644) << 16)
     @test f.method == meth
     @test abs(mtime(f) - modtime) < 2
     @test fileequals(f, data)
 end
 close(dir)
+
+
+# mark file as executable using externalattrs.
+dir = ZipFile.Writer("$tmp/executable.zip")
+f = ZipFile.addfile(dir, "myscript.txt"; os=ZipFile.UNIX, externalattrs=UInt32(UInt32(0o0100755) << 16))
+close(dir)
+dir = ZipFile.Reader("$tmp/executable.zip")
+f = dir.files[1]
+@test f.os == ZipFile.UNIX
+@test f.externalattrs == UInt32(UInt32(0o0100755) << 16)
 
 
 s1 = "this is an example sentence"
