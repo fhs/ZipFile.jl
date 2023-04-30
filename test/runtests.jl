@@ -78,6 +78,7 @@ zipdata = [
     ("info.txt", "Julia\nfor\ntechnical computing\n", ZipFile.Store),
     ("julia.txt", "julia\n"^10, ZipFile.Deflate),
     ("empty1.txt", "", ZipFile.Store),
+    ("😀😀.txt", "", ZipFile.Store),
     ("empty2.txt", "", ZipFile.Deflate),
 ]
 # 2013-08-16	9:42:24
