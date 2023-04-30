@@ -619,7 +619,7 @@ uncompressed or Deflate for compressed).
 - `mtime::Float64`: Modification time of the file.
 - `os::UInt8=UNIX`: Format of the external file attributes.
 - `externalattrs::UInt32`: If specified, override default external file attributes.
-    Default attributes are regular file type and `-rw-rw-r--` permissions.
+    Default attributes are regular file type and `-rw-r--r--` permissions.
     This [post](https://unix.stackexchange.com/a/14727) has details on what each bit means.
 
 """
@@ -637,7 +637,7 @@ function addfile(w::Writer, name::AbstractString;
     if isnothing(externalattrs)
         # Pick default externalattrs based on os
         if os == UNIX
-            externalattrs = UInt32(UInt32(0o0100664) << 16)
+            externalattrs = UInt32(UInt32(0o0100644) << 16)
         else
             @warn "default external file attributes for os $(os) unknown, setting external file attributes to zero"
             externalattrs = UInt32(0)
