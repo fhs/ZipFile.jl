@@ -61,15 +61,20 @@ const Deflate = UInt16(8)
 
 const _Method2Str = Dict{UInt16,String}(Store => "Store", Deflate => "Deflate")
 
+"External file attributes are compatible with UNIX"
+const UNIX = UInt8(3)
+
 mutable struct ReadableFile <: IO
     _io :: IO
     name :: String   # filename
+    os :: UInt8                 # format of the external file attributes
     method :: UInt16            # compression method
     dostime :: UInt16           # modification time in MS-DOS format
     dosdate :: UInt16           # modification date in MS-DOS format
     crc32 :: UInt32             # CRC32 of uncompressed data
     compressedsize :: UInt64    # file size after compression
     uncompressedsize :: UInt64  # size of uncompressed file
+    externalattrs :: UInt32     # external file attributes
     _offset :: UInt64
     _datapos :: Int64   # position where data begins
     _zio :: IO          # compression IO
@@ -80,12 +85,13 @@ mutable struct ReadableFile <: IO
 
     function ReadableFile(io::IO, name::AbstractString, method::UInt16, dostime::UInt16,
             dosdate::UInt16, crc32::UInt32, compressedsize::Unsigned,
-            uncompressedsize::Unsigned, _offset::Unsigned)
+            uncompressedsize::Unsigned, _offset::Unsigned;
+            os::UInt8=0, externalattrs::UInt32=0,)
         if method != Store && method != Deflate
             error("unknown compression method $method")
         end
-        new(io, name, method, dostime, dosdate, crc32,
-            compressedsize, uncompressedsize, _offset, -1, io, 0, 0, 0)
+        new(io, name, os, method, dostime, dosdate, crc32,
+            compressedsize, uncompressedsize, externalattrs, _offset, -1, io, 0, 0, 0)
     end
 end
 
@@ -124,12 +130,14 @@ end
 mutable struct WritableFile <: IO
     _io :: IO
     name :: String   # filename
+    os :: UInt8                 # format of the external file attributes
     method :: UInt16            # compression method
     dostime :: UInt16           # modification time in MS-DOS format
     dosdate :: UInt16           # modification date in MS-DOS format
     crc32 :: UInt32             # CRC32 of uncompressed data
     compressedsize :: UInt32    # file size after compression
     uncompressedsize :: UInt32  # size of uncompressed file
+    externalattrs :: UInt32     # external file attributes
     _offset :: UInt32
     _datapos :: Int64   # position where data begins
     _zio :: IO          # compression IO
@@ -139,12 +147,13 @@ mutable struct WritableFile <: IO
     function WritableFile(io::IO, name::AbstractString, method::UInt16, dostime::UInt16,
             dosdate::UInt16, crc32::UInt32, compressedsize::UInt32,
             uncompressedsize::UInt32, _offset::UInt32, _datapos::Int64,
-            _zio::IO, _closed::Bool)
+            _zio::IO, _closed::Bool;
+            os::UInt8=0, externalattrs::UInt32=0,)
         if method != Store && method != Deflate
             error("unknown compression method $method")
         end
-        f = new(io, name, method, dostime, dosdate, crc32,
-            compressedsize, uncompressedsize, _offset, _datapos, _zio, _closed)
+        f = new(io, name, os, method, dostime, dosdate, crc32,
+            compressedsize, uncompressedsize, externalattrs, _offset, _datapos, _zio, _closed)
         finalizer(close, f)
         f
     end
@@ -340,7 +349,9 @@ function _getfiles(io::IO, diroffset::Integer, nfiles::Integer)
         if readle(io, UInt32) != _CentralDirSig
             error("invalid file header")
         end
-        skip(io, 2+2)
+        version_made_by = readle(io, UInt16)
+        os = UInt8(version_made_by >> 8)
+        skip(io, 2) # version needed to extract
         flag = readle(io, UInt16)
         if (flag & (1<<0)) != 0
             error("encryption not supported")
@@ -355,7 +366,8 @@ function _getfiles(io::IO, diroffset::Integer, nfiles::Integer)
         namelen = readle(io, UInt16)
         extralen = readle(io, UInt16)
         commentlen = readle(io, UInt16)
-        skip(io, 2+2+4)
+        skip(io, 2+2) # disk number start and internal file attributes
+        externalattrs = readle(io, UInt32)
         offset = readle(io, UInt32)
         name = utf8_validate(read!(io, Array{UInt8}(undef, namelen)))
         extra = read!(io, Array{UInt8}(undef, extralen))
@@ -380,7 +392,8 @@ function _getfiles(io::IO, diroffset::Integer, nfiles::Integer)
         end
         skip(io, commentlen)
         files[i] = ReadableFile(io, name, method, dostime, dosdate,
-            crc32, compsize, uncompsize, offset)
+            crc32, compsize, uncompsize, offset; 
+            os=os, externalattrs=externalattrs)
     end
     files
 end
@@ -418,9 +431,9 @@ function flush(w::Writer)
     # write central directory record
     for f in w.files
         _writele(w._io, UInt32(_CentralDirSig))
-        _writele(w._io, UInt16(_ZipVersion))
-        _writele(w._io, UInt16(_ZipVersion))
-        _writele(w._io, UInt16(0))
+        _writele(w._io, UInt16(UInt16(f.os) << 8 | 20)) # made by zip v2.0
+        _writele(w._io, UInt16(_ZipVersion)) # version needed to extract
+        _writele(w._io, UInt16(1 << 11)) # UTF-8 name
         _writele(w._io, UInt16(f.method))
         _writele(w._io, UInt16(f.dostime))
         _writele(w._io, UInt16(f.dosdate))
@@ -429,11 +442,11 @@ function flush(w::Writer)
         _writele(w._io, UInt32(f.uncompressedsize))
         b = Vector{UInt8}(codeunits(f.name))
         _writele(w._io, UInt16(length(b)))
-        _writele(w._io, UInt16(0))
-        _writele(w._io, UInt16(0))
-        _writele(w._io, UInt16(0))
-        _writele(w._io, UInt16(0))
-        _writele(w._io, UInt32(0))
+        _writele(w._io, UInt16(0)) # extra field length
+        _writele(w._io, UInt16(0)) # file comment length
+        _writele(w._io, UInt16(0)) # disk number start
+        _writele(w._io, UInt16(0)) # internal file attributes
+        _writele(w._io, UInt32(f.externalattrs))
         _writele(w._io, UInt32(f._offset))
         _writele(w._io, b)
         cdsize += 46+length(b)
@@ -600,15 +613,35 @@ Add a new file named name into the ZIP file writer w, and return the
 WritableFile for the new file. We don't allow concurrrent writes,
 thus the file previously added using this function will be closed.
 
-Method specifies the compression method that will be used (Store for
+# Keywords
+- `method`: Compression method that will be used (Store for
 uncompressed or Deflate for compressed).
+- `mtime::Float64`: Modification time of the file.
+- `os::UInt8=UNIX`: Format of the external file attributes.
+- `externalattrs::Union{UInt32, Nothing}`: Override default external file attributes.
+    Default attributes are regular file type and `-rw-r--r--` permissions.
+    This [post](https://unix.stackexchange.com/a/14727) has details on what each bit means.
 
-Mtime is the modification time of the file.
 """
-function addfile(w::Writer, name::AbstractString; method::Integer=Store, mtime::Float64=-1.0)
+function addfile(w::Writer, name::AbstractString;
+        method::Integer=Store,
+        mtime::Float64=-1.0,
+        os::UInt8=UNIX,
+        externalattrs::Union{UInt32, Nothing}=nothing,
+    )
     if w._current !== nothing
         close(w._current)
         w._current = nothing
+    end
+
+    if isnothing(externalattrs)
+        # Pick default externalattrs based on os
+        if os == UNIX
+            externalattrs = UInt32(UInt32(0o0100644) << 16)
+        else
+            @warn "default external file attributes for os $(os) unknown, setting external file attributes to zero"
+            externalattrs = UInt32(0)
+        end
     end
 
     if mtime < 0
@@ -617,12 +650,12 @@ function addfile(w::Writer, name::AbstractString; method::Integer=Store, mtime::
     dostime, dosdate = _msdostime(mtime)
     f = WritableFile(w._io, name, UInt16(method), dostime, dosdate,
         UInt32(0), UInt32(0), UInt32(0), UInt32(position(w._io)),
-        Int64(-1), w._io, false)
+        Int64(-1), w._io, false; os=os, externalattrs=externalattrs)
 
     # Write local file header. Missing entries will be filled in later.
     _writele(w._io, UInt32(_LocalFileHdrSig))
-    _writele(w._io, UInt16(_ZipVersion))
-    _writele(w._io, UInt16(0))
+    _writele(w._io, UInt16(_ZipVersion)) # version needed to extract
+    _writele(w._io, UInt16(1 << 11)) # UTF-8 name
     _writele(w._io, UInt16(f.method))
     _writele(w._io, UInt16(f.dostime))
     _writele(w._io, UInt16(f.dosdate))
