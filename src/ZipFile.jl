@@ -618,7 +618,7 @@ thus the file previously added using this function will be closed.
 uncompressed or Deflate for compressed).
 - `mtime::Float64`: Modification time of the file.
 - `os::UInt8=UNIX`: Format of the external file attributes.
-- `externalattrs::UInt32`: If specified, override default external file attributes.
+- `externalattrs::Union{UInt32, Nothing}`: Override default external file attributes.
     Default attributes are regular file type and `-rw-r--r--` permissions.
     This [post](https://unix.stackexchange.com/a/14727) has details on what each bit means.
 
