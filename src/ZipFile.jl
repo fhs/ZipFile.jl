@@ -516,13 +516,7 @@ function update_reader!(f::ReadableFile, data::Array{UInt8})
     f._zpos = position(f._io) - f._datapos
     datalen = length(data)
     f._pos += datalen
-    chunk_size = if Sys.WORD_SIZE > 32 2^31 else datalen end 
-    start = 1
-    while datalen > 0
-        f._currentcrc32 = Zlib.crc32(view(data, start:start-1+min(datalen, chunk_size)), f._currentcrc32)
-        datalen -= chunk_size
-        start += chunk_size
-    end
+    f._currentcrc32 = Zlib.crc32(data, f._currentcrc32)
 
     if eof(f)
         if f.method == Deflate
@@ -669,9 +663,8 @@ Base.readavailable(io::ZipFile.ReadableFile) = read(io)
 
 # Write nb elements located at p into f.
 function unsafe_write(f::WritableFile, p::Ptr{UInt8}, nb::UInt)
-    # zlib doesn't like 0 length writes
     if nb == 0
-        return 0
+        return UInt(0)
     end
 
     n = unsafe_write(f._zio, p, nb)
@@ -679,7 +672,7 @@ function unsafe_write(f::WritableFile, p::Ptr{UInt8}, nb::UInt)
         error("short write")
     end
 
-    f.crc32 = Zlib.crc32(unsafe_wrap(Array, p, nb), f.crc32)
+    f.crc32 = Zlib.unsafe_crc32(p, nb, f.crc32)
     f.uncompressedsize += n
     n
 end

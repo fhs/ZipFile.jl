@@ -122,15 +122,20 @@ end
 
 Writer(io::IO, raw::Bool=false) = Writer(io, 9, raw)
 
-function write(w::Writer, p::Ptr, nb::Integer)
+function Base.unsafe_write(w::Writer, p::Ptr{UInt8}, nb::UInt)
+    if nb == 0
+        return zero(nb)
+    end
+    max_chunk_size::UInt = UInt(typemax(Cuint))>>1
+    chunk_offset = UInt(0)
+    num_bytes_left = nb
+    chunk_size = min(max_chunk_size, num_bytes_left)
+    w.strm.avail_in = chunk_size
     w.strm.next_in = p
-    w.strm.avail_in = nb
     outbuf = Vector{UInt8}(undef, 1024)
-
     GC.@preserve outbuf while true
         w.strm.avail_out = length(outbuf)
         w.strm.next_out = pointer(outbuf)
-
         ret = ccall((:deflate, libz),
                     Int32, (Ptr{z_stream}, Int32),
                     Ref(w.strm), Z_NO_FLUSH)
@@ -139,10 +144,21 @@ function write(w::Writer, p::Ptr, nb::Integer)
         end
 
         n = length(outbuf) - w.strm.avail_out
-        if n > 0 && write(w.io, outbuf[1:n]) != n
+        if n > 0 && write(w.io, view(outbuf,1:n)) != n
             error("short write")
         end
-        if w.strm.avail_out != 0
+        # Update w.strm.avail_in if needed
+        if w.strm.avail_in == 0
+            # mark that previous chunk was written
+            chunk_offset += chunk_size
+            num_bytes_left -= chunk_size
+            # new chunk size, will be zero at the end.
+            chunk_size = min(max_chunk_size, num_bytes_left)
+            @assert chunk_offset + chunk_size ≤ nb
+            w.strm.next_in = p + chunk_offset
+            w.strm.avail_in = chunk_size
+        end
+        if (w.strm.avail_out != 0) && (w.strm.avail_in == 0)
             break
         end
     end
@@ -151,38 +167,8 @@ function write(w::Writer, p::Ptr, nb::Integer)
     nb
 end
 
-function write(w::Writer, a::Array{UInt8})
-    GC.@preserve a write(w, pointer(a), length(a))
-end
-
-# If this is not provided, Base.IO write methods will write
-# arrays one element at a time.
-function write(w::Writer, a::Array{T}) where T
-    if isbits(T)
-        GC.@preserve a write(w, pointer(a), length(a)*sizeof(T))
-    else
-        invoke(write, Tuple{IO,Array}, w, a)
-    end
-end
-
-# Copied from Julia base/io.jl
-function write(w::Writer, a::SubArray{T,N,A}) where {T,N,A<:Array}
-    if !isbits(T) || stride(a,1)!=1
-        return invoke(write, Tuple{Any,AbstractArray}, s, a)
-    end
-    colsz = size(a,1)*sizeof(T)
-    if N<=1
-        return GC.@preserve a write(s, pointer(a, 1), colsz)
-    else
-        for idx in CartesianRange(tuple(1, size(a)[2:end]...))
-            GC.@preserve a write(w, pointer(a, idx.I), colsz)
-        end
-        return colsz*Base.trailingsize(a,2)
-    end
-end
-
 function write(w::Writer, b::UInt8)
-    write(w, UInt8[b])
+    write(w, Ref(b))
 end
 
 function close(w::Writer)
@@ -365,10 +351,27 @@ function eof(r::Reader)
     bytesavailable(r.buf) == 0 && eof(r.io)
 end
 
-function crc32(data::AbstractArray{UInt8}, crc::Integer=0)
-    convert(UInt32, (ccall((:crc32, libz),
-                 Culong, (Culong, Ptr{UInt8}, Cuint),
-                 crc, data, length(data))))
+function unsafe_crc32(p::Ptr{UInt8}, nb::UInt, crc::UInt32)
+    max_chunk_size::UInt = UInt(typemax(Cuint))>>1
+    chunk_offset = UInt(0)
+    num_bytes_left = nb
+    while num_bytes_left > 0
+        chunk_size = min(max_chunk_size, num_bytes_left)
+        @assert chunk_offset + chunk_size ≤ nb
+        crc = ccall((:crc32, libz),
+            Culong, (Culong, Ptr{UInt8}, Cuint),
+            crc, p + chunk_offset, chunk_size,
+        )
+        chunk_offset += chunk_size
+        num_bytes_left -= chunk_size
+    end
+    crc
+end
+
+function crc32(data::AbstractArray{UInt8}, crc::Integer=0)::UInt32
+    GC.@preserve data begin
+        unsafe_crc32(pointer(data), UInt(length(data)), crc)
+    end
 end
 
 crc32(data::AbstractString, crc::Integer=0) = crc32(convert(AbstractArray{UInt8}, data), crc)
