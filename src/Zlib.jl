@@ -122,9 +122,9 @@ end
 
 Writer(io::IO, raw::Bool=false) = Writer(io, 9, raw)
 
-function Base.unsafe_write(w::Writer, p::Ptr{UInt8}, nb::UInt)
+function Base.unsafe_write(w::Writer, p::Ptr{UInt8}, nb::UInt)::UInt
     if nb == 0
-        return zero(nb)
+        return UInt(0)
     end
     max_chunk_size::UInt = UInt(typemax(Cuint))>>1
     chunk_offset = UInt(0)
@@ -358,7 +358,7 @@ function unsafe_crc32(p::Ptr{UInt8}, nb::UInt, crc::UInt32)::UInt32
     while num_bytes_left > 0
         chunk_size = min(max_chunk_size, num_bytes_left)
         @assert chunk_offset + chunk_size ≤ nb
-        crc = ccall((:crc32, libz),
+        crc::UInt32 = ccall((:crc32, libz),
             Culong, (Culong, Ptr{UInt8}, Cuint),
             crc, p + chunk_offset, chunk_size,
         )
