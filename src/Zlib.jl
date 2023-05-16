@@ -351,7 +351,7 @@ function eof(r::Reader)
     bytesavailable(r.buf) == 0 && eof(r.io)
 end
 
-function unsafe_crc32(p::Ptr{UInt8}, nb::UInt, crc::UInt32)
+function unsafe_crc32(p::Ptr{UInt8}, nb::UInt, crc::UInt32)::UInt32
     max_chunk_size::UInt = UInt(typemax(Cuint))>>1
     chunk_offset = UInt(0)
     num_bytes_left = nb
@@ -370,7 +370,7 @@ end
 
 function crc32(data::AbstractArray{UInt8}, crc::Integer=0)::UInt32
     GC.@preserve data begin
-        unsafe_crc32(pointer(data), UInt(length(data)), crc)
+        unsafe_crc32(pointer(data), UInt(length(data)), UInt32(crc))
     end
 end
 

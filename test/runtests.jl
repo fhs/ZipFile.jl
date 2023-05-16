@@ -182,4 +182,8 @@ if !Debug
     rm(tmp, recursive=true)
 end
 
+if "bigtests" in ARGS
+    include("bigtests.jl")
+end
+
 println("done")
