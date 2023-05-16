@@ -352,20 +352,10 @@ function eof(r::Reader)
 end
 
 function unsafe_crc32(p::Ptr{UInt8}, nb::UInt, crc::UInt32)::UInt32
-    max_chunk_size::UInt = UInt(typemax(Cuint))>>1
-    chunk_offset = UInt(0)
-    num_bytes_left = nb
-    while num_bytes_left > 0
-        chunk_size = min(max_chunk_size, num_bytes_left)
-        @assert chunk_offset + chunk_size ≤ nb
-        crc::UInt32 = ccall((:crc32, libz),
-            Culong, (Culong, Ptr{UInt8}, Cuint),
-            crc, p + chunk_offset, chunk_size,
-        )
-        chunk_offset += chunk_size
-        num_bytes_left -= chunk_size
-    end
-    crc
+    ccall((:crc32_z, libz),
+        Culong, (Culong, Ptr{UInt8}, Csize_t),
+        crc, p, nb,
+    )
 end
 
 function crc32(data::AbstractArray{UInt8}, crc::Integer=0)::UInt32
