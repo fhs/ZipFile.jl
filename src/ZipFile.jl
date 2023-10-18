@@ -605,7 +605,7 @@ uncompressed or Deflate for compressed).
 
 Mtime is the modification time of the file.
 """
-function addfile(w::Writer, name::AbstractString; method::Integer=Store, mtime::Float64=-1.0)
+function addfile(w::Writer, name::AbstractString; method::Integer=Store, mtime::Float64=-1.0, deflate_level::Integer=6)
     if w._current !== nothing
         close(w._current)
         w._current = nothing
@@ -636,7 +636,7 @@ function addfile(w::Writer, name::AbstractString; method::Integer=Store, mtime::
 
     f._datapos = position(w._io)
     if f.method == Deflate
-        f._zio = Zlib.Writer(f._io, true)
+        f._zio = Zlib.Writer(f._io, deflate_level, true)
     end
     w.files = [w.files; f]
     w._current = f
