@@ -596,16 +596,20 @@ end
 """
     addfile(w::Writer, name::AbstractString; method::Integer=Store, mtime::Float64=-1.0)
 
-Add a new file named name into the ZIP file writer w, and return the
+Add a new file named `name` into the ZIP file writer `w`, and return the
 WritableFile for the new file. We don't allow concurrrent writes,
 thus the file previously added using this function will be closed.
 
-Method specifies the compression method that will be used (Store for
+Method specifies the compression `method` that will be used (Store for
 uncompressed or Deflate for compressed).
 
-Mtime is the modification time of the file.
+Method provides a `deflate_level` option which if provided implies a
+`Deflate` compression method. When `Deflate` is specified as the `method`,
+the default `deflate_level` is 6.
+
+`Mtime` is the modification time of the file.
 """
-function addfile(w::Writer, name::AbstractString; method::Integer=Store, mtime::Float64=-1.0, deflate_level::Integer=6)
+function addfile(w::Writer, name::AbstractString; method::Integer=Store, mtime::Float64=-1.0, deflate_level=nothing)
     if w._current !== nothing
         close(w._current)
         w._current = nothing
@@ -635,8 +639,8 @@ function addfile(w::Writer, name::AbstractString; method::Integer=Store, mtime::
     _writele(w._io, b)
 
     f._datapos = position(w._io)
-    if f.method == Deflate
-        f._zio = Zlib.Writer(f._io, deflate_level, true)
+    if f.method == Deflate || !isnothing(deflate_level)
+        f._zio = Zlib.Writer(f._io, something(deflate_level, 6), true)
     end
     w.files = [w.files; f]
     w._current = f
