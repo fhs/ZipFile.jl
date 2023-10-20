@@ -78,6 +78,8 @@ mutable struct ReadableFile <: IO
     _pos :: Int64       # current position in uncompressed data
     _zpos :: Int64      # current position in compressed data
 
+    reader::Ref
+
     function ReadableFile(io::IO, name::AbstractString, method::UInt16, dostime::UInt16,
             dosdate::UInt16, crc32::UInt32, compressedsize::Unsigned,
             uncompressedsize::Unsigned, _offset::Unsigned)
@@ -85,7 +87,7 @@ mutable struct ReadableFile <: IO
             error("unknown compression method $method")
         end
         new(io, name, method, dostime, dosdate, crc32,
-            compressedsize, uncompressedsize, _offset, -1, io, 0, 0, 0)
+            compressedsize, uncompressedsize, _offset, -1, io, 0, 0, 0, Ref{Any}())
     end
 end
 
@@ -108,6 +110,9 @@ mutable struct Reader
         diroff, nfiles, comment = _find_diroffset(io, endoff)
         files = _getfiles(io, diroff, nfiles)
         x = new(io, close_io, files, comment)
+        for f in files
+            f.reader[] = x
+        end
         finalizer(close, x)
         x
     end
@@ -135,6 +140,7 @@ mutable struct WritableFile <: IO
     _zio :: IO          # compression IO
 
     _closed :: Bool
+    writer::Ref
 
     function WritableFile(io::IO, name::AbstractString, method::UInt16, dostime::UInt16,
             dosdate::UInt16, crc32::UInt32, compressedsize::UInt32,
@@ -144,7 +150,7 @@ mutable struct WritableFile <: IO
             error("unknown compression method $method")
         end
         f = new(io, name, method, dostime, dosdate, crc32,
-            compressedsize, uncompressedsize, _offset, _datapos, _zio, _closed)
+            compressedsize, uncompressedsize, _offset, _datapos, _zio, _closed, Ref{Any}())
         finalizer(close, f)
         f
     end
@@ -618,6 +624,7 @@ function addfile(w::Writer, name::AbstractString; method::Integer=Store, mtime::
     f = WritableFile(w._io, name, UInt16(method), dostime, dosdate,
         UInt32(0), UInt32(0), UInt32(0), UInt32(position(w._io)),
         Int64(-1), w._io, false)
+    f.writer[] = w
 
     # Write local file header. Missing entries will be filled in later.
     _writele(w._io, UInt32(_LocalFileHdrSig))
