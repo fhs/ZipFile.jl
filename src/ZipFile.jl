@@ -94,8 +94,14 @@ Reader represents a ZIP file open for reading.
 
     Reader(io::IO)
     Reader(filename::AbstractString)
+    Reader(f::Function, io::IO)
+    Reader(f::Function, filename::AbstractString)
 
 Read a ZIP file from io or the file named filename.
+
+The function forms call f with the reader, close it in a finally block, and
+return the result of f. They support do-block syntax. An IO supplied by the
+caller remains open; a file opened by Reader is closed.
 """
 mutable struct Reader
     _io :: IO
@@ -119,6 +125,15 @@ end
 
 function Reader(filename::AbstractString)
     Reader(Base.open(filename), true)
+end
+
+function Reader(f::Function, source::Union{IO, AbstractString})
+    reader = Reader(source)
+    try
+        return f(reader)
+    finally
+        close(reader)
+    end
 end
 
 mutable struct WritableFile <: IO
@@ -155,8 +170,14 @@ Writer represents a ZIP file open for writing.
 
     Writer(io::IO)
     Writer(filename::AbstractString)
+    Writer(f::Function, io::IO)
+    Writer(f::Function, filename::AbstractString)
 
 Create a new ZIP file that will be written to io or the file named filename.
+
+The function forms call f with the writer, finish the archive in a finally
+block, and return the result of f. They support do-block syntax. An IO
+supplied by the caller remains open; a file opened by Writer is closed.
 """
 mutable struct Writer
     _io :: IO
@@ -178,6 +199,15 @@ end
 
 function Writer(filename::AbstractString)
     Writer(Base.open(filename, "w"), true)
+end
+
+function Writer(f::Function, destination::Union{IO, AbstractString})
+    writer = Writer(destination)
+    try
+        return f(writer)
+    finally
+        close(writer)
+    end
 end
 
 # Print out a summary of f in a human-readable format.
@@ -595,6 +625,7 @@ end
 
 """
     addfile(w::Writer, name::AbstractString; method::Integer=Store, mtime::Float64=-1.0)
+    addfile(f::Function, w::Writer, name::AbstractString; kwargs...)
 
 Add a new file named name into the ZIP file writer w, and return the
 WritableFile for the new file. We don't allow concurrrent writes,
@@ -604,6 +635,11 @@ Method specifies the compression method that will be used (Store for
 uncompressed or Deflate for compressed).
 
 Mtime is the modification time of the file.
+
+The function form calls f with the new entry, closes that entry in a finally
+block, and returns the result of f. Keywords are forwarded to addfile. This
+supports do-block syntax without closing w. The one-open-entry rule still
+applies: adding another entry closes the previous entry.
 """
 function addfile(w::Writer, name::AbstractString; method::Integer=Store, mtime::Float64=-1.0)
     if w._current !== nothing
@@ -641,6 +677,15 @@ function addfile(w::Writer, name::AbstractString; method::Integer=Store, mtime::
     w.files = [w.files; f]
     w._current = f
     w._current
+end
+
+function addfile(f::Function, w::Writer, name::AbstractString; kwargs...)
+    entry = addfile(w, name; kwargs...)
+    try
+        return f(entry)
+    finally
+        close(entry)
+    end
 end
 
 # Returns the current position in file f.
