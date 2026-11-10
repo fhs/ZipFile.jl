@@ -5,6 +5,8 @@ Debug = false
 
 @test Any[] == detect_ambiguities(Base, Core, ZipFile)
 
+include("do.jl")
+
 function findfile(dir, name)
     for f in dir.files
         if f.name == name
